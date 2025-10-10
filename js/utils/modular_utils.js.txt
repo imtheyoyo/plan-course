@@ -1,0 +1,229 @@
+/**
+ * ================================================
+ * js/utils/dates.js - Gestion des dates
+ * ================================================
+ */
+
+const DateUtils = {
+    /**
+     * Formater une date en JJ/MM/AA
+     */
+    format(date) {
+        return `${date.getDate().toString().padStart(2,'0')}/${(date.getMonth()+1).toString().padStart(2,'0')}/${date.getFullYear().toString().slice(-2)}`;
+    },
+    
+    /**
+     * Obtenir le prochain lundi
+     */
+    getNextMonday(fromDate = new Date()) {
+        const dayOfWeek = fromDate.getDay();
+        const daysUntilMonday = dayOfWeek === 1 ? 7 : (8 - dayOfWeek) % 7;
+        const nextMonday = new Date(fromDate);
+        nextMonday.setDate(fromDate.getDate() + daysUntilMonday);
+        return nextMonday;
+    },
+    
+    /**
+     * Ajouter des jours à une date
+     */
+    addDays(date, days) {
+        const result = new Date(date);
+        result.setDate(result.getDate() + days);
+        return result;
+    },
+    
+    /**
+     * Calculer le nombre de semaines entre deux dates
+     */
+    weeksBetween(startDate, endDate) {
+        const msPerDay = 86400000;
+        return Math.round((endDate - startDate) / (msPerDay * 7));
+    },
+    
+    /**
+     * Ajuster une date au début de semaine (lundi)
+     */
+    adjustToMonday(date) {
+        const dayOfWeek = date.getDay();
+        const adjustment = (dayOfWeek === 0) ? 6 : dayOfWeek - 1;
+        return this.addDays(date, -adjustment);
+    },
+    
+    /**
+     * Convertir string ISO en Date
+     */
+    fromISO(isoString) {
+        return new Date(isoString);
+    },
+    
+    /**
+     * Convertir Date en string ISO
+     */
+    toISO(date) {
+        return date.toISOString().split('T')[0];
+    }
+};
+
+/**
+ * ================================================
+ * js/utils/formatters.js - Formatage des données
+ * ================================================
+ */
+
+const Formatters = {
+    /**
+     * Convertir hh:mm:ss en secondes
+     */
+    timeToSeconds(timeStr) {
+        const parts = timeStr.split(':').map(Number);
+        if (parts.length === 3) {
+            return parts[0] * 3600 + parts[1] * 60 + parts[2];
+        } else if (parts.length === 2) {
+            return parts[0] * 60 + parts[1];
+        }
+        return NaN;
+    },
+    
+    /**
+     * Convertir secondes en allure min:sec/km
+     */
+    secondsToPace(seconds) {
+        if (isNaN(seconds) || seconds === 0) return 'N/A';
+        const minutes = Math.floor(seconds / 60);
+        const secs = Math.round(seconds % 60);
+        return `${minutes}:${secs.toString().padStart(2, '0')}/km`;
+    },
+    
+    /**
+     * Formater une durée en minutes vers hh:mm ou mm min
+     */
+    formatDuration(minutes) {
+        if (isNaN(minutes) || minutes <= 0) return '';
+        const hours = Math.floor(minutes / 60);
+        const mins = Math.round(minutes % 60);
+        if (hours === 0) return `${mins}min`;
+        return `${hours}h${mins.toString().padStart(2, '0')}`;
+    },
+    
+    /**
+     * Formater un nombre avec décimales
+     */
+    formatNumber(num, decimals = 1) {
+        return Number(num).toFixed(decimals);
+    },
+    
+    /**
+     * Formater kilométrage
+     */
+    formatKm(km) {
+        return `${Math.round(km)} km`;
+    },
+    
+    /**
+     * Capitaliser première lettre
+     */
+    capitalize(str) {
+        return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+};
+
+/**
+ * ================================================
+ * js/utils/storage.js - Import/Export
+ * ================================================
+ */
+
+const Storage = {
+    /**
+     * Exporter le plan en JSON
+     */
+    exportPlan(planData, userInput) {
+        const saveData = {
+            version: CONFIG.version,
+            buildDate: CONFIG.buildDate,
+            exportDate: new Date().toISOString(),
+            userInput: userInput,
+            planData: planData
+        };
+        
+        const dataStr = JSON.stringify(saveData, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `plan-course-v${CONFIG.version}-${DateUtils.toISO(new Date())}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    },
+    
+    /**
+     * Importer un plan depuis JSON
+     */
+    importPlan(file, callback) {
+        const reader = new FileReader();
+        
+        reader.onload = (event) => {
+            try {
+                const data = JSON.parse(event.target.result);
+                
+                if (!data.planData || !data.userInput) {
+                    throw new Error('Format JSON invalide');
+                }
+                
+                // Convertir les dates string en objets Date
+                data.planData.plan.forEach(week => {
+                    week.startDate = new Date(week.startDate);
+                });
+                
+                callback(null, data);
+            } catch (error) {
+                callback(error, null);
+            }
+        };
+        
+        reader.onerror = () => {
+            callback(new Error('Erreur de lecture du fichier'), null);
+        };
+        
+        reader.readAsText(file);
+    },
+    
+    /**
+     * Sauvegarder dans localStorage (optionnel)
+     */
+    saveToLocal(key, data) {
+        try {
+            localStorage.setItem(key, JSON.stringify(data));
+            return true;
+        } catch (e) {
+            console.warn('localStorage non disponible:', e);
+            return false;
+        }
+    },
+    
+    /**
+     * Charger depuis localStorage (optionnel)
+     */
+    loadFromLocal(key) {
+        try {
+            const data = localStorage.getItem(key);
+            return data ? JSON.parse(data) : null;
+        } catch (e) {
+            console.warn('localStorage non disponible:', e);
+            return null;
+        }
+    },
+    
+    /**
+     * Effacer localStorage
+     */
+    clearLocal(key) {
+        try {
+            localStorage.removeItem(key);
+            return true;
+        } catch (e) {
+            console.warn('localStorage non disponible:', e);
+            return false;
+        }
+    }
+};

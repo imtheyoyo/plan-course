@@ -1,0 +1,325 @@
+/**
+ * ================================================
+ * js/core/vdot.js - Calculs physiologiques
+ * ================================================
+ */
+
+const VDOT = {
+    /**
+     * Calculer le VDOT à partir d'une distance et d'un temps
+     */
+    calculate(distanceKm, timeSeconds) {
+        if (isNaN(timeSeconds) || timeSeconds <= 0) return null;
+        
+        const velocity = (distanceKm * 1000) / (timeSeconds / 60);
+        const vo2 = -4.6 + 0.182258 * velocity + 0.000104 * velocity * velocity;
+        const intensity = 0.8 + 0.1894393 * Math.exp(-0.012778 * (timeSeconds/60)) + 
+                         0.2989558 * Math.exp(-0.1932605 * (timeSeconds/60));
+        
+        return vo2 / intensity;
+    },
+    
+    /**
+     * Calculer VMA depuis VDOT
+     */
+    calculateVMA(vdot) {
+        return vdot / 2.85;
+    },
+    
+    /**
+     * Calculer VDOT depuis VMA (test Demi-Cooper)
+     */
+    calculateFromVMA(vma) {
+        return vma * 2.85;
+    },
+    
+    /**
+     * Calculer toutes les allures d'entraînement
+     */
+    getTrainingPaces(vdot, raceDistanceKm) {
+        if (!vdot) return null;
+        
+        // Fonction helper : VO2 -> Vitesse
+        const velFromVO2 = (vo2) => {
+            const a = 0.000104, b = 0.182258, c = -(4.6 + vo2);
+            const delta = b * b - 4 * a * c;
+            return delta < 0 ? 0 : (-b + Math.sqrt(delta)) / (2 * a);
+        };
+        
+        // Fonction helper : Vitesse -> Allure (sec/km)
+        const velToPace = (velocity) => {
+            return velocity <= 0 ? 0 : (1000 / velocity) * 60;
+        };
+        
+        // Prédiction du temps de course
+        const predictedTimeSec = (distKm) => {
+            const timeMinutes = -31.06 + 11.24 * distKm - 1.15 * Math.pow(distKm, 2) + 0.04 * Math.pow(distKm, 3);
+            const intensity = 0.8 + 0.1894393 * Math.exp(-0.012778 * timeMinutes) + 
+                             0.2989558 * Math.exp(-0.1932605 * timeMinutes);
+            const targetVO2 = vdot * intensity;
+            const velocity = velFromVO2(targetVO2);
+            return (distKm * 1000) / (velocity / 60);
+        };
+        
+        // Calcul des allures
+        const percentages = {
+            E_low: 0.62,
+            E_high: 0.7,
+            M: 0.81,
+            T: 0.88,
+            I: 0.97
+        };
+        
+        const paces = {};
+        for (const [key, pct] of Object.entries(percentages)) {
+            paces[key] = velToPace(velFromVO2(vdot * pct));
+        }
+        
+        // Allure VMA (I) et Répétition (R)
+        const vI = velFromVO2(vdot * percentages.I);
+        paces.I = velToPace(vI);
+        paces.R = velToPace(vI * 1.06);
+        
+        // Allure Course (C)
+        paces.C = predictedTimeSec(raceDistanceKm) / raceDistanceKm;
+        
+        return paces;
+    },
+    
+    /**
+     * Calculer le TSS d'une séance
+     */
+    calculateTSS(session, paces) {
+        const duration = session.distance ? (session.distance * (paces.E_low / 60)) : 0;
+        const IF = CONFIG.intensityFactors[session.intensity] || 0.6;
+        return duration * IF;
+    }
+};
+
+/**
+ * ================================================
+ * js/core/progression.js - Algorithme de progression
+ * ================================================
+ */
+
+const Progression = {
+    /**
+     * Calculer le kilométrage hebdomadaire cible
+     */
+    calculateTargetWeeklyKm(raceDistanceKm, vdot, runnerLevel) {
+        let baseTarget;
+        
+        if (raceDistanceKm >= 42) {
+            baseTarget = vdot < 45 ? 65 : (vdot < 55 ? 80 : 95);
+        } else if (raceDistanceKm >= 21) {
+            baseTarget = vdot < 45 ? 50 : (vdot < 55 ? 65 : 75);
+        } else if (raceDistanceKm >= 10) {
+            baseTarget = vdot < 45 ? 40 : (vdot < 55 ? 55 : 65);
+        } else {
+            baseTarget = vdot < 45 ? 35 : (vdot < 55 ? 45 : 55);
+        }
+        
+        // Ajustement selon le niveau
+        if (runnerLevel === 'beginner') baseTarget *= 0.85;
+        if (runnerLevel === 'advanced') baseTarget *= 1.15;
+        
+        return baseTarget;
+    },
+    
+    /**
+     * Générer la configuration des semaines (kilométrage, tests, récupération)
+     */
+    generateWeekConfigs(weeks, currentKm, targetKm, profile, taperWeeks) {
+        const configs = [];
+        const weeksToTarget = weeks - taperWeeks;
+        
+        // Taux de croissance
+        let buildRate = Math.pow(targetKm / currentKm, 1 / (weeksToTarget * 0.75));
+        buildRate = Math.min(buildRate, profile.buildRateMax);
+        
+        let peakKm = currentKm;
+        let lastBuildKm = currentKm;
+        
+        // Semaines de test
+        const testWeeks = [];
+        for (let i = CONFIG.firstTestWeek; i < weeksToTarget; i += CONFIG.testFrequency) {
+            testWeeks.push(i);
+        }
+        
+        // Phase de construction
+        for (let i = 0; i < weeksToTarget; i++) {
+            const weekInCycle = (i % 4) + 1;
+            const isRecovery = weekInCycle === 4;
+            let targetWeekKm;
+            
+            if (isRecovery) {
+                targetWeekKm = lastBuildKm * profile.recoveryFactor;
+            } else {
+                const cycleProgress = weekInCycle / 3;
+                const microLoad = 1 + (cycleProgress - 1) * 0.05;
+                targetWeekKm = currentKm * microLoad;
+                
+                if (weekInCycle === 3) {
+                    lastBuildKm = targetWeekKm;
+                    currentKm *= buildRate;
+                }
+            }
+            
+            configs.push({
+                km: targetWeekKm,
+                isTest: testWeeks.includes(i) && !isRecovery,
+                isRecovery: isRecovery
+            });
+            
+            if (targetWeekKm > peakKm) peakKm = targetWeekKm;
+        }
+        
+        // Phase d'affûtage
+        const taperReductions = taperWeeks === 3 ? [0.25, 0.45, 0.70] :
+                               taperWeeks === 2 ? [0.35, 0.65] : [0.60];
+        
+        for (let i = 0; i < taperWeeks; i++) {
+            configs.push({
+                km: Math.max(15, peakKm * (1 - taperReductions[i])),
+                isRecovery: false,
+                isTest: false
+            });
+        }
+        
+        return configs;
+    },
+    
+    /**
+     * Déterminer les phases du plan
+     */
+    calculatePhases(totalWeeks, raceDistanceKm) {
+        const taperWeeks = raceDistanceKm >= 42 ? 3 : (raceDistanceKm >= 21 ? 2 : 1);
+        const peakWeeks = Math.max(2, Math.floor(totalWeeks * 0.22));
+        const qualityWeeks = Math.max(3, Math.floor(totalWeeks * 0.38));
+        const baseWeeks = totalWeeks - taperWeeks - peakWeeks - qualityWeeks;
+        
+        return [
+            { name: 'Fondation', weeks: baseWeeks, type: 'base' },
+            { name: 'Qualité', weeks: qualityWeeks, type: 'quality' },
+            { name: 'Pic', weeks: peakWeeks, type: 'peak' },
+            { name: 'Affûtage', weeks: taperWeeks, type: 'taper' }
+        ];
+    }
+};
+
+/**
+ * ================================================
+ * js/core/placement.js - Placement intelligent des séances
+ * ================================================
+ */
+
+const Placement = {
+    /**
+     * Placer une séance dans un jour préféré
+     */
+    placeSession(session, preferredDay, availableDays, assignedDays, finalSessions) {
+        if (session && availableDays.includes(preferredDay) && !assignedDays.has(preferredDay)) {
+            session.day = preferredDay;
+            finalSessions.push(session);
+            assignedDays.add(preferredDay);
+            return true;
+        }
+        return false;
+    },
+    
+    /**
+     * Placer les séances dures avec espacement
+     */
+    placeHardSessions(hardSessions, availableDays, assignedDays, finalSessions) {
+        for (const session of hardSessions) {
+            let placed = false;
+            
+            // Tests : priorité mardi/mercredi/jeudi
+            if (session.isTest) {
+                for (const day of CONFIG.preferredDays.test) {
+                    if (this.placeSession(session, day, availableDays, assignedDays, finalSessions)) {
+                        placed = true;
+                        break;
+                    }
+                }
+            }
+            
+            // VMA : priorité lundi/mardi
+            if (!placed && session.intensity === 4) {
+                for (const day of CONFIG.preferredDays.vma) {
+                    if (this.placeSession(session, day, availableDays, assignedDays, finalSessions)) {
+                        placed = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Seuil : priorité mercredi/jeudi
+            if (!placed && session.intensity === 3) {
+                for (const day of CONFIG.preferredDays.threshold) {
+                    if (this.placeSession(session, day, availableDays, assignedDays, finalSessions)) {
+                        placed = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Placement avec espacement de 2 jours
+            if (!placed) {
+                for (const day of availableDays) {
+                    if (!assignedDays.has(day - 1) && !assignedDays.has(day - 2) &&
+                        !assignedDays.has(day + 1) && !assignedDays.has(day + 2)) {
+                        session.day = day;
+                        finalSessions.push(session);
+                        assignedDays.add(day);
+                        placed = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Placement avec espacement de 1 jour minimum
+            if (!placed) {
+                for (const day of availableDays) {
+                    if (!assignedDays.has(day - 1) && !assignedDays.has(day + 1)) {
+                        session.day = day;
+                        finalSessions.push(session);
+                        assignedDays.add(day);
+                        placed = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Placement forcé si nécessaire
+            if (!placed) {
+                const day = availableDays.find(d => !assignedDays.has(d));
+                if (day !== undefined) {
+                    session.day = day;
+                    finalSessions.push(session);
+                    assignedDays.add(day);
+                }
+            }
+        }
+        
+        return availableDays.filter(d => !assignedDays.has(d));
+    },
+    
+    /**
+     * Placer les footings dans les jours restants
+     */
+    placeEasySessions(easySessions, availableDays, finalSessions) {
+        // Éviter le lundi si possible
+        const preferredDays = availableDays.filter(d => d !== 0);
+        const mondayDays = availableDays.filter(d => d === 0);
+        const orderedDays = [...preferredDays, ...mondayDays];
+        
+        easySessions.sort((a, b) => (b.km || 0) - (a.km || 0)).forEach(session => {
+            const day = orderedDays.shift();
+            if (day !== undefined) {
+                session.day = day;
+                finalSessions.push(session);
+            }
+        });
+    }
+};

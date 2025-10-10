@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="version" content="2.1.0">
+    <meta name="build-date" content="2025-01-10">
+    <meta name="generator" content="Claude (Anthropic)">
+    <title>Générateur de Plan de Course V2.1</title>
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="css/styles.css">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="antialiased">
+    <div class="min-h-screen container mx-auto p-4 sm:p-6 lg:p-8">
+        
+        <header class="text-center mb-8">
+            <h1 class="text-4xl sm:text-5xl font-extrabold text-white">Générateur de Plan de Course V2.1</h1>
+            <p class="mt-2 text-lg text-gray-400">Plan sur-mesure avec adaptation au profil et visualisation de charge</p>
+            <p class="version-info">Version 2.1.0 • Build 2025-01-10 • Propulsé par Claude (Anthropic)</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- SIDEBAR -->
+            <aside class="lg:col-span-1 space-y-6">
+                
+                <!-- Calendrier -->
+                <div class="card p-6 rounded-xl shadow-lg">
+                    <h2 class="text-2xl font-bold text-white border-b border-gray-700 pb-3 mb-4">1. Votre Calendrier</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="start-date" class="block text-sm font-medium text-gray-300">Date de début du plan</label>
+                            <input type="date" id="start-date" class="form-input mt-1 block w-full rounded-md shadow-sm">
+                        </div>
+                        <div>
+                            <label for="race-date" class="block text-sm font-medium text-gray-300">Date de la course</label>
+                            <input type="date" id="race-date" class="form-input mt-1 block w-full rounded-md shadow-sm">
+                        </div>
+                        <div>
+                            <label for="race-distance" class="block text-sm font-medium text-gray-300">Distance de l'objectif</label>
+                            <select id="race-distance" class="form-select mt-1 block w-full rounded-md shadow-sm">
+                                <option value="5">5 km</option>
+                                <option value="10">10 km</option>
+                                <option value="21.0975">Semi-Marathon</option>
+                                <option value="42.195">Marathon</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Profil -->
+                <div class="card p-6 rounded-xl shadow-lg">
+                    <h2 class="text-2xl font-bold text-white border-b border-gray-700 pb-3 mb-4">2. Votre Profil</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="runner-level" class="block text-sm font-medium text-gray-300">Niveau d'expérience</label>
+                            <select id="runner-level" class="form-select mt-1 block w-full rounded-md shadow-sm">
+                                <option value="beginner">Débutant (< 2 ans)</option>
+                                <option value="intermediate" selected>Intermédiaire (2-5 ans)</option>
+                                <option value="advanced">Avancé (> 5 ans)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="perf-distance" class="block text-sm font-medium text-gray-300">Distance de référence</label>
+                            <select id="perf-distance" class="form-select mt-1 block w-full rounded-md shadow-sm">
+                                <option value="21.0975">Semi-Marathon</option>
+                                <option value="10">10 km</option>
+                                <option value="5">5 km</option>
+                                <option value="demi-cooper">Test Demi-Cooper (6 min)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="perf-value" id="perf-value-label" class="block text-sm font-medium text-gray-300">Temps (hh:mm:ss)</label>
+                            <input type="text" id="perf-value" placeholder="01:41:45" class="form-input mt-1 block w-full rounded-md shadow-sm">
+                        </div>
+                        <div class="text-right">
+                            <a href="#" id="demi-cooper-link" class="text-sm text-blue-400 hover:underline">Qu'est-ce que le Test Demi-Cooper ?</a>
+                        </div>
+                        <div>
+                            <label for="current-km" class="block text-sm font-medium text-gray-300">Kilométrage hebdo. actuel (km)</label>
+                            <input type="number" id="current-km" value="30" class="form-input mt-1 block w-full rounded-md shadow-sm">
+                        </div>
+                    </div>
+                    <div id="vdot-display" class="mt-5 text-center"></div>
+                </div>
+
+                <!-- Disponibilités -->
+                <div class="card p-6 rounded-xl shadow-lg">
+                    <h2 class="text-2xl font-bold text-white border-b border-gray-700 pb-3 mb-4">3. Vos Disponibilités</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300">Jours d'entraînement</label>
+                            <div id="training-days" class="grid grid-cols-4 gap-2 mt-2"></div>
+                        </div>
+                        <div>
+                            <label for="long-run-day" class="block text-sm font-medium text-gray-300">Jour de la sortie longue</label>
+                            <select id="long-run-day" class="form-select mt-1 block w-full rounded-md shadow-sm">
+                                <option value="5">Samedi</option>
+                                <option value="6" selected>Dimanche</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <button id="generate-plan" class="btn-primary w-full text-white font-bold py-3 px-4 rounded-lg text-lg shadow-lg flex items-center justify-center">
+                    <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    Générer mon Plan
+                </button>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <button id="save-plan" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg hidden">Sauvegarder</button>
+                    <button id="import-plan" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">Importer</button>
+                    <input type="file" id="import-file" class="hidden" accept=".json">
+                    <button id="print-plan" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg hidden">Imprimer</button>
+                    <button id="reset-plan" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg hidden">Réinitialiser</button>
+                </div>
+            </aside>
+
+            <!-- MAIN CONTENT -->
+            <main id="plan-output" class="lg:col-span-2 space-y-6">
+                <div id="plan-placeholder" class="card p-6 rounded-xl shadow-lg min-h-[600px] flex flex-col items-center justify-center text-center">
+                    <svg class="w-24 h-24 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                    <h3 class="mt-4 text-2xl font-bold text-white">Votre plan d'entraînement apparaîtra ici.</h3>
+                    <p class="mt-1 text-gray-400">Remplissez les informations à gauche et cliquez sur "Générer".</p>
+                </div>
+                
+                <div id="load-chart-container" class="card p-6 rounded-xl shadow-lg hidden">
+                    <h3 class="text-xl font-bold text-white mb-4">Visualisation de la charge d'entraînement</h3>
+                    <div id="load-chart" class="bg-gray-900 rounded-lg p-4"></div>
+                    <div class="mt-4 flex justify-center gap-4 text-xs">
+                        <div class="flex items-center"><div class="w-3 h-3 rounded bg-blue-500 mr-1"></div> Faible</div>
+                        <div class="flex items-center"><div class="w-3 h-3 rounded bg-green-500 mr-1"></div> Modérée</div>
+                        <div class="flex items-center"><div class="w-3 h-3 rounded bg-orange-500 mr-1"></div> Élevée</div>
+                        <div class="flex items-center"><div class="w-3 h-3 rounded bg-red-500 mr-1"></div> Très élevée</div>
+                    </div>
+                </div>
+                
+                <div id="plan-content-wrapper" class="card p-6 rounded-xl shadow-lg hidden">
+                    <div id="plan-content"></div>
+                </div>
+            </main>
+        </div>
+
+        <!-- MODAL EDITION -->
+        <div id="edit-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 hidden z-50">
+            <div class="card rounded-xl shadow-lg w-full max-w-md p-6">
+                <h3 class="text-2xl font-bold text-white mb-4">Éditer la séance</h3>
+                <div class="space-y-4">
+                    <div>
+                        <label for="edit-type" class="block text-sm font-medium text-gray-300">Type de séance</label>
+                        <input type="text" id="edit-type" class="form-input mt-1 block w-full rounded-md shadow-sm">
+                    </div>
+                    <div>
+                        <label for="edit-details" class="block text-sm font-medium text-gray-300">Détails</label>
+                        <textarea id="edit-details" rows="6" class="form-input mt-1 block w-full rounded-md shadow-sm"></textarea>
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end space-x-3">
+                    <button id="cancel-edit" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">Annuler</button>
+                    <button id="save-edit" class="btn-primary text-white font-bold py-2 px-4 rounded-lg">Sauvegarder</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- MODAL DEMI-COOPER -->
+        <div id="cooper-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 hidden z-50">
+            <div class="card rounded-xl shadow-lg w-full max-w-lg p-6">
+                <h3 class="text-2xl font-bold text-white mb-4">Le Test Demi-Cooper</h3>
+                <div class="text-gray-300 space-y-3">
+                    <p>Le test Demi-Cooper est un excellent moyen d'estimer votre VMA.</p>
+                    <p><strong>Protocole :</strong></p>
+                    <ul class="list-disc list-inside space-y-1">
+                        <li><strong>Échauffement :</strong> 15-20 min de footing très lent</li>
+                        <li><strong>Le test :</strong> Courez la plus grande distance possible en <strong>6 minutes</strong></li>
+                        <li><strong>Mesure :</strong> Notez la distance en mètres</li>
+                        <li><strong>Retour au calme :</strong> 10 min de footing très lent</li>
+                    </ul>
+                </div>
+                <div class="mt-6 flex justify-end">
+                    <button id="close-cooper-modal" class="btn-primary text-white font-bold py-2 px-4 rounded-lg">Compris</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Scripts modulaires -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="js/config.js"></script>
+    <script src="js/utils/dates.js"></script>
+    <script src="js/utils/formatters.js"></script>
+    <script src="js/utils/storage.js"></script>
+    <script src="js/core/vdot.js"></script>
+    <script src="js/core/progression.js"></script>
+    <script src="js/core/placement.js"></script>
+    <script src="js/sessions/beginner.js"></script>
+    <script src="js/sessions/intermediate.js"></script>
+    <script src="js/sessions/advanced.js"></script>
+    <script src="js/ui/forms.js"></script>
+    <script src="js/ui/render.js"></script>
+    <script src="js/ui/interactions.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
