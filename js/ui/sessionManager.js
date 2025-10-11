@@ -365,6 +365,13 @@ const SessionManager = {
         const week = STATE.currentPlanData.plan[weekIndex];
         const paces = STATE.currentPlanData.paces;
         
+        // Vérifier que paces existe
+        if (!paces) {
+            console.error('⚠️ Paces non disponibles');
+            alert('Erreur : Les allures ne sont pas disponibles');
+            return;
+        }
+        
         let totalDistance = 0;
         let maxIntensity = 1;
         
@@ -404,7 +411,13 @@ const SessionManager = {
         const structure = {};
         SessionManager.currentSteps.forEach((step, index) => {
             const repeat = step.isRepeat ? step.repeat : 1;
-            const paceStr = Formatters.secondsToPace(paces[step.pace]);
+            const paceValue = paces[step.pace];
+            
+            if (!paceValue) {
+                console.warn('⚠️ Allure non trouvée pour:', step.pace);
+            }
+            
+            const paceStr = paceValue ? Formatters.secondsToPace(paceValue) : 'N/A';
             
             let desc;
             if (step.durationType === 'time') {
@@ -430,7 +443,8 @@ const SessionManager = {
                 }
                 
                 if (step.recovery.intensity !== 'none') {
-                    const recupPaceStr = Formatters.secondsToPace(paces[step.recovery.intensity]);
+                    const recupPaceValue = paces[step.recovery.intensity];
+                    const recupPaceStr = recupPaceValue ? Formatters.secondsToPace(recupPaceValue) : 'N/A';
                     structure.recuperation = `${recupDesc} à ${recupPaceStr}`;
                 } else {
                     structure.recuperation = `${recupDesc} trot`;
