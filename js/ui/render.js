@@ -35,6 +35,9 @@ const Render = {
         // Filtrer par phase active
         const phaseToDisplay = activePhase || [...new Set(planData.plan.map(w => w.phase))][0];
         this.filterWeeksByPhase(phaseToDisplay);
+
+        // Ajouter et Supprimer des séances
+        setTimeout(() => SessionManager.addSessionButtons(), 100);
     },
     
     /**
