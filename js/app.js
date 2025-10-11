@@ -164,10 +164,11 @@ const App = {
             return this.generateRaceWeek(trainingDays, paces, weekStartDate);
         }
         
-        // Ajouter test si nécessaire
+        // Créer le test si nécessaire (sera ajouté aux sessions dures)
+        let testSession = null;
         if (isTestWeek) {
-            allSessions.push({
-                type: raceDistanceKm >= 21 ? 'Test 5km' : 'Test VMA (Demi-Cooper)',
+            testSession = {
+                type: raceDistanceKm >= 21 ? '📊 Test 5km' : '📊 Test VMA (Demi-Cooper)',
                 structure: {
                     echauffement: "20 min EF + 3 accélérations",
                     bloc: raceDistanceKm >= 21 
@@ -178,7 +179,7 @@ const App = {
                 intensity: 4,
                 isTest: true,
                 distance: raceDistanceKm >= 21 ? 5 : 1.6
-            });
+            };
         }
         
         // Nombre de séances de qualité
