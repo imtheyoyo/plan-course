@@ -2,13 +2,23 @@
 
 > Générateur de plan d'entraînement personnalisé avec périodisation intelligente, tests de contrôle automatiques et visualisation de charge.
 
+
 [![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/imtheyoyo/plan-course)
 [![Build](https://img.shields.io/badge/build-2025--01--10-orange.svg)](https://github.com/imtheyoyo/plan-course)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+![GitHub stars](https://img.shields.io/github/stars/imtheyoyo/plan-course?style=social)
+![GitHub forks](https://img.shields.io/github/forks/imtheyoyo/plan-course?style=social)
+![GitHub issues](https://img.shields.io/github/issues/imtheyoyo/plan-course)
+![GitHub last commit](https://img.shields.io/github/last-commit/imtheyoyo/plan-course)
+![GitHub repo size](https://img.shields.io/github/repo-size/imtheyoyo/plan-course)
 
 [🚀 Démo en ligne](https://imtheyoyo.github.io/plan-course/)
 [📖 Documentation](https://github.com/imtheyoyo/plan-course/tree/main/docs)
 [🐛 Signaler un bug](https://github.com/imtheyoyo/plan-course/issues)
+
+
+
+
 
 ---
 
