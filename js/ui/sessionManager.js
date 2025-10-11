@@ -3,7 +3,6 @@
  * js/ui/sessionManager.js - Gestion des séances
  * ================================================
  * Ajout, suppression et modification de séances
- * À ajouter dans le projet
  */
 
 const SessionManager = {
@@ -114,33 +113,55 @@ const SessionManager = {
         const modal = document.createElement('div');
         modal.className = 'session-modal-overlay';
         modal.innerHTML = `
-            <div class="session-modal-structured">
+            <div class="session-modal">
                 <div class="session-modal-header">
                     <h3>➕ Ajouter une séance</h3>
-                    <p class="text-sm">Semaine ${week.weekNumber} - ${CONFIG.fullDayNames[dayIndex]} ${DateUtils.format(DateUtils.addDays(week.startDate, dayIndex))}</p>
                     <button class="close-modal-btn" onclick="this.closest('.session-modal-overlay').remove()">✕</button>
                 </div>
                 
-                <div class="session-modal-body-structured">
-                    <div class="session-steps-container" id="session-steps">
-                        <!-- Les étapes seront ajoutées ici dynamiquement -->
+                <div class="session-modal-body">
+                    <div class="form-group">
+                        <label>Semaine ${week.weekNumber} - ${CONFIG.fullDayNames[dayIndex]}</label>
+                        <p class="text-sm text-gray-400">${DateUtils.format(DateUtils.addDays(week.startDate, dayIndex))}</p>
                     </div>
                     
-                    <div class="session-actions">
-                        <button class="btn-add-step" onclick="SessionManager.addStepToSession()">
-                            ➕ Ajouter une étape
-                        </button>
+                    <div class="form-group">
+                        <label>Type de séance</label>
+                        <select id="new-session-type" class="form-input">
+                            <optgroup label="Endurance">
+                                <option value="footing">Footing</option>
+                                <option value="sortie-moyenne">Sortie Moyenne</option>
+                                <option value="sortie-longue">Sortie Longue</option>
+                                <option value="regeneration">Régénération</option>
+                            </optgroup>
+                            <optgroup label="Qualité">
+                                <option value="vma">VMA Courte</option>
+                                <option value="vma-longue">VMA Longue</option>
+                                <option value="seuil">Seuil</option>
+                                <option value="tempo">Tempo Run</option>
+                                <option value="fartlek">Fartlek</option>
+                            </optgroup>
+                            <optgroup label="Spécifique">
+                                <option value="allure-course">Allure Course</option>
+                                <option value="longue-specifique">Sortie Longue Spécifique</option>
+                            </optgroup>
+                            <optgroup label="Tests">
+                                <option value="test-vma">Test VMA</option>
+                                <option value="test-5km">Test 5km</option>
+                            </optgroup>
+                        </select>
                     </div>
                     
-                    <div class="session-summary">
-                        <div class="summary-item">
-                            <span class="summary-label">Durée totale estimée</span>
-                            <span class="summary-value" id="total-duration">0:00</span>
-                        </div>
-                        <div class="summary-item">
-                            <span class="summary-label">Distance estimée</span>
-                            <span class="summary-value" id="total-distance">0.00 km</span>
-                        </div>
+                    <div class="form-group">
+                        <label>Distance (km)</label>
+                        <input type="number" id="new-session-distance" class="form-input" 
+                               value="10" min="1" max="50" step="0.5">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Description (optionnel)</label>
+                        <textarea id="new-session-description" class="form-input" rows="3" 
+                                  placeholder="Ex: 3x2000m à allure seuil, récup 2min"></textarea>
                     </div>
                 </div>
                 
@@ -148,8 +169,8 @@ const SessionManager = {
                     <button class="btn-secondary" onclick="this.closest('.session-modal-overlay').remove()">
                         Annuler
                     </button>
-                    <button class="btn-primary" onclick="SessionManager.saveStructuredSession(${weekIndex}, ${dayIndex})">
-                        💾 Enregistrer l'entraînement
+                    <button class="btn-primary" onclick="SessionManager.addSession(${weekIndex}, ${dayIndex})">
+                        ➕ Ajouter
                     </button>
                 </div>
             </div>
@@ -159,13 +180,6 @@ const SessionManager = {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) modal.remove();
         });
-        
-        // Initialiser avec une étape d'échauffement
-        setTimeout(() => {
-            this.currentSteps = [];
-            this.currentPaces = paces;
-            this.addStepToSession('Échauffement');
-        }, 100);
         
         return modal;
     },
@@ -183,16 +197,16 @@ const SessionManager = {
         const description = document.getElementById('new-session-description').value.trim();
         
         // Créer la nouvelle séance
-        const newSession = this.createSessionFromType(type, distance, description, paces, dayIndex);
+        const newSession = this.createSessionFromType(type, distance, description, paces, dayIndex, week);
         
         // Ajouter à la semaine
         week.sessions.push(newSession);
         
         // Recalculer le kilométrage et TSS
-        week.totalKm = week.sessions.reduce((sum, s) => sum + (s.distance || 0), 0);
-        week.tss = week.sessions.reduce((sum, s) => 
+        week.totalKm = Math.round(week.sessions.reduce((sum, s) => sum + (s.distance || 0), 0));
+        week.tss = Math.round(week.sessions.reduce((sum, s) => 
             sum + VDOT.calculateTSS(s, paces), 0
-        );
+        ));
         
         // Fermer le modal
         document.querySelector('.session-modal-overlay').remove();
@@ -206,7 +220,7 @@ const SessionManager = {
     /**
      * Créer une séance selon le type
      */
-    createSessionFromType(type, distance, description, paces, dayIndex) {
+    createSessionFromType(type, distance, description, paces, dayIndex, week) {
         const structures = {
             'footing': {
                 type: 'Footing',
@@ -328,10 +342,7 @@ const SessionManager = {
             ...template,
             distance: distance,
             day: dayIndex,
-            fullDate: `${CONFIG.fullDayNames[dayIndex]} ${DateUtils.format(DateUtils.addDays(
-                STATE.currentPlanData.plan.find((_, i) => true).startDate, 
-                dayIndex
-            ))}`
+            fullDate: `${CONFIG.fullDayNames[dayIndex]} ${DateUtils.format(DateUtils.addDays(week.startDate, dayIndex))}`
         };
         
         // Ajouter la description personnalisée si fournie
