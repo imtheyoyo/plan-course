@@ -225,3 +225,65 @@ body {
     color: #6e7681;
     margin-top: 0.25rem;
 }
+
+/* ===== TESTS DE CONTROLE ===== */
+
+/* Badge sur les semaines de test */
+.week-header.has-test::before {
+    content: '📊';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 1.5rem;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.week-header.has-test {
+    position: relative;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+}
+
+/* Style des cartes de test */
+.session-card.test-session,
+.session-card[data-type*="Test"] {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+    border-left: 4px solid #667eea;
+    box-shadow: 0 4px 6px rgba(102, 126, 234, 0.2);
+}
+
+/* Badge "TEST" */
+.session-card.test-session .session-type::before,
+.session-card[data-type*="Test"] .session-type::before {
+    content: '📊 TEST';
+    display: inline-block;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-right: 8px;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.1); opacity: 0.8; }
+}
+
+/* Bannière d'information */
+.test-info-banner {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    margin: 16px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.9rem;
+}
+
+.test-info-banner::before {
+    content: '📊';
+    font-size: 1.5rem;
+}
