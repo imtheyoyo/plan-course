@@ -204,16 +204,17 @@ const App = {
         );
         
         // Générer footings
-        const testKm = isTestWeek ? (raceDistanceKm >= 21 ? 5 : 1.6) : 0;
+        const testKm = testSession ? testSession.distance : 0;
         const qualityKm = qualitySessions.reduce((sum, s) => sum + (s.distance || 0), 0);
         const longRunKm = longRunSession.km || 0;
         const remainingKm = Math.max(0, weeklyKm - longRunKm - qualityKm - testKm);
         
-        const numEasy = Math.max(0, trainingDays.length - 1 - numQuality - (isTestWeek ? 1 : 0));
+        const numEasy = Math.max(0, trainingDays.length - 1 - numQuality - (testSession ? 1 : 0));
         const easySessions = this.generateEasySessions(numEasy, remainingKm, longRunKm, isRecoveryWeek, paces);
         
         // Combiner toutes les séances
         allSessions = [
+            ...(testSession ? [testSession] : []),
             ...qualitySessions,
             longRunSession,
             ...easySessions
