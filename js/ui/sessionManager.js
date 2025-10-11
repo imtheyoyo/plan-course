@@ -1,8 +1,16 @@
 /**
  * ================================================
- * js/ui/sessionManager.js - Gestion des séances V9
+ * SessionManager.js
+ * Version: 9.1.0
+ * Date: 2025-01-11
+ * Heure: 14:30 UTC
  * ================================================
- * Version corrigée avec getPaceValue() pour résoudre le bug N/A
+ * Gestion complète des séances avec support multi-étapes
+ * - Correction bug allures N/A (getPaceValue)
+ * - Drag & Drop des étapes
+ * - Support blocs multiples (10x 400m + 5x 1000m)
+ * - Parsing intelligent des répétitions
+ * ================================================
  */
 
 const SessionManager = {
