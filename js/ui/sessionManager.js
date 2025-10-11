@@ -172,9 +172,16 @@ const SessionManager = {
             durationType: 'time',
             duration: defaultType === 'Échauffement' ? 20 : 10,
             distance: 1,
+            distanceUnit: 'km',  // 🆕 Unité de distance (km ou m)
             pace: 'E',
             repeat: 1,
-            isRepeat: false
+            isRepeat: false,
+            recovery: {  // 🆕 Récupération entre répétitions
+                type: 'time',  // 'time' ou 'distance'
+                value: 90,  // 90 secondes ou distance
+                unit: 'sec',  // 'sec', 'min', 'm', 'km'
+                intensity: 'none'  // 'none' ou code allure
+            }
         };
         
         SessionManager.currentSteps.push(step);
@@ -240,9 +247,13 @@ const SessionManager = {
                         <div class="step-row">
                             <label>Distance totale</label>
                             <div class="step-input-group">
-                                <input type="number" value="${step.distance}" min="0.1" max="50" step="0.1"
+                                <input type="number" value="${step.distance}" min="0.1" max="50000" step="0.1"
                                        onchange="SessionManager.updateStep('${step.id}', 'distance', this.value)">
-                                <span>km</span>
+                                <select class="step-unit-select"
+                                        onchange="SessionManager.updateStep('${step.id}', 'distanceUnit', this.value)">
+                                    <option value="km" ${step.distanceUnit === 'km' ? 'selected' : ''}>km</option>
+                                    <option value="m" ${step.distanceUnit === 'm' ? 'selected' : ''}>m</option>
+                                </select>
                             </div>
                         </div>
                     `}
@@ -260,13 +271,70 @@ const SessionManager = {
                         </select>
                     </div>
                     
-                    ${!step.isRepeat ? `
+                    ${step.isRepeat ? `
+                        <div class="step-recovery-section">
+                            <div class="step-row">
+                                <label>Récupération</label>
+                                <div class="step-toggle-group">
+                                    <button class="step-toggle ${step.recovery.type === 'time' ? 'active' : ''}"
+                                            onclick="SessionManager.updateRecovery('${step.id}', 'type', 'time')">
+                                        Temps
+                                    </button>
+                                    <button class="step-toggle ${step.recovery.type === 'distance' ? 'active' : ''}"
+                                            onclick="SessionManager.updateRecovery('${step.id}', 'type', 'distance')">
+                                        Distance
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            ${step.recovery.type === 'time' ? `
+                                <div class="step-row">
+                                    <label>Durée récup</label>
+                                    <div class="step-input-group">
+                                        <input type="number" value="${step.recovery.unit === 'min' ? step.recovery.value : step.recovery.value}" 
+                                               min="1" max="600"
+                                               onchange="SessionManager.updateRecovery('${step.id}', 'value', this.value)">
+                                        <select class="step-unit-select"
+                                                onchange="SessionManager.updateRecovery('${step.id}', 'unit', this.value)">
+                                            <option value="sec" ${step.recovery.unit === 'sec' ? 'selected' : ''}>sec</option>
+                                            <option value="min" ${step.recovery.unit === 'min' ? 'selected' : ''}>min</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            ` : `
+                                <div class="step-row">
+                                    <label>Distance récup</label>
+                                    <div class="step-input-group">
+                                        <input type="number" value="${step.recovery.value}" 
+                                               min="1" max="5000" step="1"
+                                               onchange="SessionManager.updateRecovery('${step.id}', 'value', this.value)">
+                                        <select class="step-unit-select"
+                                                onchange="SessionManager.updateRecovery('${step.id}', 'unit', this.value)">
+                                            <option value="m" ${step.recovery.unit === 'm' ? 'selected' : ''}>m</option>
+                                            <option value="km" ${step.recovery.unit === 'km' ? 'selected' : ''}>km</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            `}
+                            
+                            <div class="step-row">
+                                <label>Intensité récup</label>
+                                <select class="step-select"
+                                        onchange="SessionManager.updateRecovery('${step.id}', 'intensity', this.value)">
+                                    <option value="none" ${step.recovery.intensity === 'none' ? 'selected' : ''}>Pas de cible</option>
+                                    <option value="E" ${step.recovery.intensity === 'E' ? 'selected' : ''}>Endurance (${Formatters.secondsToPace(SessionManager.currentPaces.E_low)})</option>
+                                    <option value="M" ${step.recovery.intensity === 'M' ? 'selected' : ''}>Marathon (${Formatters.secondsToPace(SessionManager.currentPaces.M)})</option>
+                                    <option value="T" ${step.recovery.intensity === 'T' ? 'selected' : ''}>Seuil (${Formatters.secondsToPace(SessionManager.currentPaces.T)})</option>
+                                </select>
+                            </div>
+                        </div>
+                    ` : `
                         <div class="step-row">
                             <button class="btn-convert-repeat" onclick="SessionManager.convertToRepeat('${step.id}')">
                                 🔁 Convertir en répétition
                             </button>
                         </div>
-                    ` : ''}
+                    `}
                 </div>
             </div>
         `).join('');
@@ -283,6 +351,55 @@ const SessionManager = {
                       field === 'distance' ? parseFloat(value) : value;
         
         if (field === 'durationType') {
+            // Réinitialiser les valeurs par défaut
+            if (value === 'distance') {
+                step.distance = 1;
+                step.distanceUnit = 'km';
+            }
+            SessionManager.renderSteps();
+        }
+        
+        SessionManager.updateSummary();
+    },
+    
+    /**
+     * Mettre à jour la récupération d'une étape
+     */
+    updateRecovery(stepId, field, value) {
+        const step = SessionManager.currentSteps.find(s => s.id === stepId);
+        if (!step || !step.recovery) return;
+        
+        step.recovery[field] = field === 'value' ? 
+            (step.recovery.type === 'time' && step.recovery.unit === 'sec' ? parseInt(value) : parseFloat(value)) : 
+            value;
+        
+        if (field === 'type') {
+            // Réinitialiser les valeurs par défaut
+            if (value === 'time') {
+                step.recovery.value = 90;
+                step.recovery.unit = 'sec';
+            } else {
+                step.recovery.value = 200;
+                step.recovery.unit = 'm';
+            }
+            SessionManager.renderSteps();
+        }
+        
+        if (field === 'unit') {
+            // Convertir les valeurs si nécessaire
+            if (step.recovery.type === 'time') {
+                if (value === 'min' && step.recovery.unit !== 'min') {
+                    step.recovery.value = Math.round(step.recovery.value / 60);
+                } else if (value === 'sec' && step.recovery.unit === 'min') {
+                    step.recovery.value = step.recovery.value * 60;
+                }
+            } else {
+                if (value === 'km' && step.recovery.unit === 'm') {
+                    step.recovery.value = step.recovery.value / 1000;
+                } else if (value === 'm' && step.recovery.unit === 'km') {
+                    step.recovery.value = step.recovery.value * 1000;
+                }
+            }
             SessionManager.renderSteps();
         }
         
@@ -307,6 +424,15 @@ const SessionManager = {
         
         step.isRepeat = true;
         step.repeat = 6;
+        // Initialiser la récupération si elle n'existe pas
+        if (!step.recovery) {
+            step.recovery = {
+                type: 'time',
+                value: 90,
+                unit: 'sec',
+                intensity: 'none'
+            };
+        }
         SessionManager.renderSteps();
     },
     
@@ -321,14 +447,50 @@ const SessionManager = {
             const repeat = step.isRepeat ? step.repeat : 1;
             const paces = SessionManager.currentPaces;
             
+            // Distance de l'étape en km
+            let stepDistanceKm = 0;
+            if (step.durationType === 'distance') {
+                stepDistanceKm = step.distanceUnit === 'm' ? step.distance / 1000 : step.distance;
+            }
+            
             if (step.durationType === 'time') {
                 totalMinutes += step.duration * repeat;
                 const paceSeconds = paces[step.pace] || paces.E_low;
                 totalDistance += (step.duration * 60 / paceSeconds) * repeat;
             } else {
-                totalDistance += step.distance * repeat;
+                totalDistance += stepDistanceKm * repeat;
                 const paceSeconds = paces[step.pace] || paces.E_low;
-                totalMinutes += (step.distance * paceSeconds / 60) * repeat;
+                totalMinutes += (stepDistanceKm * paceSeconds / 60) * repeat;
+            }
+            
+            // Ajouter le temps/distance de récupération
+            if (step.isRepeat && step.recovery && repeat > 1) {
+                const recupCount = repeat - 1; // Une récup de moins que de répétitions
+                
+                if (step.recovery.type === 'time') {
+                    const recupMinutes = step.recovery.unit === 'min' ? 
+                        step.recovery.value : step.recovery.value / 60;
+                    totalMinutes += recupMinutes * recupCount;
+                    
+                    // Estimer la distance de récupération
+                    if (step.recovery.intensity !== 'none') {
+                        const recupPace = paces[step.recovery.intensity] || paces.E_high;
+                        totalDistance += (recupMinutes * 60 / recupPace) * recupCount;
+                    }
+                } else {
+                    const recupDistanceKm = step.recovery.unit === 'm' ? 
+                        step.recovery.value / 1000 : step.recovery.value;
+                    totalDistance += recupDistanceKm * recupCount;
+                    
+                    // Estimer le temps de récupération
+                    if (step.recovery.intensity !== 'none') {
+                        const recupPace = paces[step.recovery.intensity] || paces.E_high;
+                        totalMinutes += (recupDistanceKm * recupPace / 60) * recupCount;
+                    } else {
+                        // Estimer à allure E si pas de cible
+                        totalMinutes += (recupDistanceKm * paces.E_high / 60) * recupCount;
+                    }
+                }
             }
         });
         
@@ -364,11 +526,31 @@ const SessionManager = {
         SessionManager.currentSteps.forEach(step => {
             const repeat = step.isRepeat ? step.repeat : 1;
             
+            // Calculer la distance de l'étape
+            let stepDistanceKm = 0;
             if (step.durationType === 'time') {
                 const paceSeconds = paces[step.pace] || paces.E_low;
-                totalDistance += (step.duration * 60 / paceSeconds) * repeat;
+                stepDistanceKm = (step.duration * 60 / paceSeconds) * repeat;
             } else {
-                totalDistance += step.distance * repeat;
+                stepDistanceKm = (step.distanceUnit === 'm' ? step.distance / 1000 : step.distance) * repeat;
+            }
+            
+            totalDistance += stepDistanceKm;
+            
+            // Ajouter la distance de récupération
+            if (step.isRepeat && step.recovery && repeat > 1) {
+                const recupCount = repeat - 1;
+                if (step.recovery.type === 'distance') {
+                    const recupDistanceKm = step.recovery.unit === 'm' ? 
+                        step.recovery.value / 1000 : step.recovery.value;
+                    totalDistance += recupDistanceKm * recupCount;
+                } else if (step.recovery.intensity !== 'none') {
+                    // Estimer la distance si récup en temps avec intensité
+                    const recupMinutes = step.recovery.unit === 'min' ? 
+                        step.recovery.value : step.recovery.value / 60;
+                    const recupPace = paces[step.recovery.intensity] || paces.E_high;
+                    totalDistance += (recupMinutes * 60 / recupPace) * recupCount;
+                }
             }
             
             const intensityMap = { E: 1, M: 2, T: 3, I: 4, R: 4, C: 3 };
@@ -377,6 +559,7 @@ const SessionManager = {
         
         const sessionName = SessionManager.currentSteps[0]?.type || 'Séance personnalisée';
         
+        // Créer la structure
         const structure = {};
         SessionManager.currentSteps.forEach((step, index) => {
             const repeat = step.isRepeat ? step.repeat : 1;
@@ -388,9 +571,30 @@ const SessionManager = {
                     ? `${repeat}x ${step.duration} min à ${paceStr}`
                     : `${step.duration} min à ${paceStr}`;
             } else {
+                const distValue = step.distanceUnit === 'm' ? 
+                    `${step.distance}m` : `${step.distance}km`;
                 desc = repeat > 1
-                    ? `${repeat}x ${step.distance}km à ${paceStr}`
-                    : `${step.distance}km à ${paceStr}`;
+                    ? `${repeat}x ${distValue} à ${paceStr}`
+                    : `${distValue} à ${paceStr}`;
+            }
+            
+            // Ajouter la récupération si applicable
+            if (step.isRepeat && step.recovery) {
+                let recupDesc = '';
+                if (step.recovery.type === 'time') {
+                    recupDesc = step.recovery.unit === 'min' ?
+                        `${step.recovery.value} min` : `${step.recovery.value} sec`;
+                } else {
+                    recupDesc = step.recovery.unit === 'm' ?
+                        `${step.recovery.value}m` : `${step.recovery.value}km`;
+                }
+                
+                if (step.recovery.intensity !== 'none') {
+                    const recupPaceStr = Formatters.secondsToPace(paces[step.recovery.intensity]);
+                    structure.recuperation = `${recupDesc} à ${recupPaceStr}`;
+                } else {
+                    structure.recuperation = `${recupDesc} trot`;
+                }
             }
             
             if (index === 0) structure.echauffement = desc;
