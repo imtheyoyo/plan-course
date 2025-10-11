@@ -559,6 +559,12 @@ const SessionManager = {
         const container = document.getElementById('session-steps');
         if (!container) return;
         
+        const paces = SessionManager.currentPaces;
+        if (!paces) {
+            console.error('⚠️ currentPaces non défini');
+            return;
+        }
+        
         container.innerHTML = SessionManager.currentSteps.map(step => `
             <div class="session-step" data-step-id="${step.id}">
                 <div class="step-header">
@@ -625,12 +631,12 @@ const SessionManager = {
                         <label>Allure</label>
                         <select class="step-select" 
                                 onchange="SessionManager.updateStep('${step.id}', 'pace', this.value)">
-                            <option value="E" ${step.pace === 'E' ? 'selected' : ''}>Endurance (${Formatters.secondsToPace(SessionManager.currentPaces.E_low)})</option>
-                            <option value="M" ${step.pace === 'M' ? 'selected' : ''}>Marathon (${Formatters.secondsToPace(SessionManager.currentPaces.M)})</option>
-                            <option value="T" ${step.pace === 'T' ? 'selected' : ''}>Seuil (${Formatters.secondsToPace(SessionManager.currentPaces.T)})</option>
-                            <option value="I" ${step.pace === 'I' ? 'selected' : ''}>Intervalle (${Formatters.secondsToPace(SessionManager.currentPaces.I)})</option>
-                            <option value="R" ${step.pace === 'R' ? 'selected' : ''}>Répétition (${Formatters.secondsToPace(SessionManager.currentPaces.R)})</option>
-                            <option value="C" ${step.pace === 'C' ? 'selected' : ''}>Course (${Formatters.secondsToPace(SessionManager.currentPaces.C)})</option>
+                            <option value="E" ${step.pace === 'E' ? 'selected' : ''}>Endurance (${paces.E_low ? Formatters.secondsToPace(paces.E_low) : 'N/A'})</option>
+                            <option value="M" ${step.pace === 'M' ? 'selected' : ''}>Marathon (${paces.M ? Formatters.secondsToPace(paces.M) : 'N/A'})</option>
+                            <option value="T" ${step.pace === 'T' ? 'selected' : ''}>Seuil (${paces.T ? Formatters.secondsToPace(paces.T) : 'N/A'})</option>
+                            <option value="I" ${step.pace === 'I' ? 'selected' : ''}>Intervalle (${paces.I ? Formatters.secondsToPace(paces.I) : 'N/A'})</option>
+                            <option value="R" ${step.pace === 'R' ? 'selected' : ''}>Répétition (${paces.R ? Formatters.secondsToPace(paces.R) : 'N/A'})</option>
+                            <option value="C" ${step.pace === 'C' ? 'selected' : ''}>Course (${paces.C ? Formatters.secondsToPace(paces.C) : 'N/A'})</option>
                         </select>
                     </div>
                     
@@ -685,9 +691,9 @@ const SessionManager = {
                                 <select class="step-select"
                                         onchange="SessionManager.updateRecovery('${step.id}', 'intensity', this.value)">
                                     <option value="none" ${step.recovery.intensity === 'none' ? 'selected' : ''}>Pas de cible</option>
-                                    <option value="E" ${step.recovery.intensity === 'E' ? 'selected' : ''}>Endurance (${Formatters.secondsToPace(SessionManager.currentPaces.E_low)})</option>
-                                    <option value="M" ${step.recovery.intensity === 'M' ? 'selected' : ''}>Marathon (${Formatters.secondsToPace(SessionManager.currentPaces.M)})</option>
-                                    <option value="T" ${step.recovery.intensity === 'T' ? 'selected' : ''}>Seuil (${Formatters.secondsToPace(SessionManager.currentPaces.T)})</option>
+                                    <option value="E" ${step.recovery.intensity === 'E' ? 'selected' : ''}>Endurance (${paces.E_low ? Formatters.secondsToPace(paces.E_low) : 'N/A'})</option>
+                                    <option value="M" ${step.recovery.intensity === 'M' ? 'selected' : ''}>Marathon (${paces.M ? Formatters.secondsToPace(paces.M) : 'N/A'})</option>
+                                    <option value="T" ${step.recovery.intensity === 'T' ? 'selected' : ''}>Seuil (${paces.T ? Formatters.secondsToPace(paces.T) : 'N/A'})</option>
                                 </select>
                             </div>
                         </div>
