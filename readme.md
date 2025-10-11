@@ -12,12 +12,15 @@
 ![GitHub last commit](https://img.shields.io/github/last-commit/imtheyoyo/plan-course)
 ![GitHub repo size](https://img.shields.io/github/repo-size/imtheyoyo/plan-course)
 
+![GitHub top language](https://img.shields.io/github/languages/top/imtheyoyo/plan-course)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/m/imtheyoyo/plan-course)
+![GitHub contributors](https://img.shields.io/github/contributors/imtheyoyo/plan-course)
+[![GitHub Pages](https://img.shields.io/badge/demo-online-success)](https://imtheyoyo.github.io/plan-course/)
+
+
 [🚀 Démo en ligne](https://imtheyoyo.github.io/plan-course/)
 [📖 Documentation](https://github.com/imtheyoyo/plan-course/tree/main/docs)
 [🐛 Signaler un bug](https://github.com/imtheyoyo/plan-course/issues)
-
-
-
 
 
 ---
