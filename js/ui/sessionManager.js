@@ -265,27 +265,29 @@ const SessionManager = {
             step.repeat = parseInt(repeatMatch[1]);
         }
         
-        // Parser la distance en mètres (ex: "400m")
-        const distanceMetersMatch = description.match(/(\d+(?:\.\d+)?)\s*m(?!\s*min)/i);
-        if (distanceMetersMatch) {
+        // IMPORTANT : Parser le temps AVANT les distances pour éviter la confusion
+        // Parser le temps (ex: "20 min", "35min")
+        const timeMatch = description.match(/(\d+)\s*min(?!$|\s*à)/i);
+        if (timeMatch) {
+            step.durationType = 'time';
+            step.duration = parseInt(timeMatch[1]);
+        }
+        
+        // Parser la distance en mètres (ex: "400m") - SEULEMENT si pas de "min" avant
+        // Utiliser un lookbehind négatif pour éviter "35min"
+        const distanceMetersMatch = description.match(/(?<!\d)(\d+(?:\.\d+)?)\s*m(?!\s*min)(?=\s|$|à)/i);
+        if (distanceMetersMatch && !timeMatch) {
             step.durationType = 'distance';
             step.distance = parseFloat(distanceMetersMatch[1]);
             step.distanceUnit = 'm';
         }
         
         // Parser la distance en km (ex: "5km", "2.5 km")
-        const distanceKmMatch = description.match(/(\d+(?:\.\d+)?)\s*km/i);
-        if (distanceKmMatch && !distanceMetersMatch) {
+        const distanceKmMatch = description.match(/(\d+(?:\.\d+)?)\s*km(?=\s|$|à)/i);
+        if (distanceKmMatch && !timeMatch && !distanceMetersMatch) {
             step.durationType = 'distance';
             step.distance = parseFloat(distanceKmMatch[1]);
             step.distanceUnit = 'km';
-        }
-        
-        // Parser le temps (ex: "20 min")
-        const timeMatch = description.match(/(\d+)\s*min/i);
-        if (timeMatch && !distanceMetersMatch && !distanceKmMatch) {
-            step.durationType = 'time';
-            step.duration = parseInt(timeMatch[1]);
         }
         
         // Parser l'allure
