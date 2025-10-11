@@ -213,30 +213,50 @@ const SessionManager = {
      * Charger les étapes d'une séance existante
      */
     loadSessionSteps(session) {
+        console.log('📥 Chargement de la séance:', session);
         const steps = [];
         
+        // Échauffement
         if (session.structure?.echauffement) {
-            steps.push(SessionManager.parseStepFromDescription('Échauffement', session.structure.echauffement));
+            console.log('🔥 Parsing échauffement:', session.structure.echauffement);
+            const step = SessionManager.parseStepFromDescription('Échauffement', session.structure.echauffement);
+            steps.push(step);
         }
         
+        // Bloc principal - détecter les répétitions
         if (session.structure?.bloc) {
-            const isRepeat = session.structure.bloc.includes('x');
+            console.log('💪 Parsing bloc principal:', session.structure.bloc);
+            const isRepeat = session.structure.bloc.includes('x') || session.structure.bloc.includes('X');
+            
             if (isRepeat) {
-                const step = SessionManager.parseStepFromDescription(session.type, session.structure.bloc, true);
+                const step = SessionManager.parseStepFromDescription(
+                    session.type, 
+                    session.structure.bloc, 
+                    true // Indiquer que c'est une répétition
+                );
+                
+                // Ajouter la récupération si elle existe
                 if (session.structure?.recuperation) {
+                    console.log('🔄 Parsing récupération:', session.structure.recuperation);
                     step.recovery = SessionManager.parseRecoveryFromDescription(session.structure.recuperation);
                 }
+                
                 steps.push(step);
             } else {
                 steps.push(SessionManager.parseStepFromDescription(session.type, session.structure.bloc));
             }
         }
         
+        // Retour au calme
         if (session.structure?.retourAuCalme) {
-            steps.push(SessionManager.parseStepFromDescription('Retour au calme', session.structure.retourAuCalme));
+            console.log('🧘 Parsing retour au calme:', session.structure.retourAuCalme);
+            const step = SessionManager.parseStepFromDescription('Retour au calme', session.structure.retourAuCalme);
+            steps.push(step);
         }
         
+        // Si aucune étape n'a pu être parsée, créer une étape par défaut
         if (steps.length === 0) {
+            console.warn('⚠️ Aucune étape parsée, création d\'une étape par défaut');
             steps.push({
                 id: `step-${Date.now()}`,
                 type: session.type || 'Séance',
@@ -256,6 +276,7 @@ const SessionManager = {
             });
         }
         
+        console.log('✅ Étapes chargées:', steps);
         SessionManager.currentSteps = steps;
         SessionManager.renderSteps();
         SessionManager.updateSummary();
@@ -283,29 +304,48 @@ const SessionManager = {
             }
         };
         
-        const repeatMatch = description.match(/(\d+)x\s*/);
+        // Parser les répétitions (ex: "10x 400m", "8x 30 sec")
+        const repeatMatch = description.match(/(\d+)x\s*/i);
         if (repeatMatch) {
             step.repeat = parseInt(repeatMatch[1]);
+            step.isRepeat = true;
+            console.log(`🔁 Répétition détectée: ${step.repeat}x`);
         }
         
-        const timeMatch = description.match(/(\d+)\s*min(?!$|\s*à)/i);
-        if (timeMatch) {
+        // Parser le temps (ex: "20 min", "35min", "30 sec")
+        const timeMinMatch = description.match(/(\d+)\s*min(?!\s*à)/i);
+        if (timeMinMatch) {
             step.durationType = 'time';
-            step.duration = parseInt(timeMatch[1]);
+            step.duration = parseInt(timeMinMatch[1]);
+            console.log(`⏱️ Temps détecté: ${step.duration} min`);
         }
         
+        // Parser les secondes (ex: "30 sec", "45sec") - pour les intervalles courts
+        const timeSecMatch = description.match(/(\d+)\s*sec/i);
+        if (timeSecMatch && !timeMinMatch) {
+            step.durationType = 'time';
+            // Convertir en minutes pour uniformiser
+            step.duration = Math.round(parseInt(timeSecMatch[1]) / 60 * 10) / 10; // Arrondi à 0.1 près
+            if (step.duration < 1) step.duration = 1; // Minimum 1 minute pour l'UI
+            console.log(`⏱️ Secondes détectées: ${timeSecMatch[1]}s → ${step.duration} min`);
+        }
+        
+        // Parser la distance en mètres (ex: "400m", "1000m")
         const distanceMetersMatch = description.match(/(?<!\d)(\d+(?:\.\d+)?)\s*m(?!\s*min)(?=\s|$|à)/i);
-        if (distanceMetersMatch && !timeMatch) {
+        if (distanceMetersMatch && !timeMinMatch && !timeSecMatch) {
             step.durationType = 'distance';
             step.distance = parseFloat(distanceMetersMatch[1]);
             step.distanceUnit = 'm';
+            console.log(`📏 Distance détectée: ${step.distance}m`);
         }
         
+        // Parser la distance en km (ex: "5km", "2.5 km")
         const distanceKmMatch = description.match(/(\d+(?:\.\d+)?)\s*km(?=\s|$|à)/i);
-        if (distanceKmMatch && !timeMatch && !distanceMetersMatch) {
+        if (distanceKmMatch && !timeMinMatch && !timeSecMatch && !distanceMetersMatch) {
             step.durationType = 'distance';
             step.distance = parseFloat(distanceKmMatch[1]);
             step.distanceUnit = 'km';
+            console.log(`📏 Distance détectée: ${step.distance}km`);
         }
         
         const paces = SessionManager.currentPaces;
@@ -606,9 +646,9 @@ const SessionManager = {
         }
         
         container.innerHTML = SessionManager.currentSteps.map(step => `
-            <div class="session-step" data-step-id="${step.id}">
+            <div class="session-step" data-step-id="${step.id}" draggable="true">
                 <div class="step-header">
-                    <div class="step-drag-handle">⋮⋮</div>
+                    <div class="step-drag-handle" style="cursor: grab;">⋮⋮</div>
                     <input type="text" class="step-title" value="${step.type}" 
                            onchange="SessionManager.updateStep('${step.id}', 'type', this.value)"
                            placeholder="Nom de l'étape">
@@ -747,6 +787,68 @@ const SessionManager = {
                 </div>
             </div>
         `).join('');
+        
+        // Activer le drag & drop sur les étapes
+        SessionManager.setupStepsDragDrop();
+    },
+    
+    /**
+     * Configurer le drag & drop des étapes
+     */
+    setupStepsDragDrop() {
+        const steps = document.querySelectorAll('.session-step');
+        let draggedElement = null;
+        let draggedIndex = null;
+        
+        steps.forEach((step, index) => {
+            // Événements de drag
+            step.addEventListener('dragstart', (e) => {
+                draggedElement = step;
+                draggedIndex = index;
+                step.style.opacity = '0.5';
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/html', step.innerHTML);
+            });
+            
+            step.addEventListener('dragend', (e) => {
+                step.style.opacity = '1';
+                // Supprimer les classes de survol
+                steps.forEach(s => s.classList.remove('drag-over'));
+            });
+            
+            // Événements de drop
+            step.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                
+                if (draggedElement !== step) {
+                    step.classList.add('drag-over');
+                }
+            });
+            
+            step.addEventListener('dragleave', (e) => {
+                step.classList.remove('drag-over');
+            });
+            
+            step.addEventListener('drop', (e) => {
+                e.preventDefault();
+                step.classList.remove('drag-over');
+                
+                if (draggedElement !== step) {
+                    const dropIndex = index;
+                    
+                    // Réorganiser le tableau currentSteps
+                    const [movedStep] = SessionManager.currentSteps.splice(draggedIndex, 1);
+                    SessionManager.currentSteps.splice(dropIndex, 0, movedStep);
+                    
+                    // Re-render
+                    SessionManager.renderSteps();
+                    SessionManager.updateSummary();
+                    
+                    console.log(`✅ Étape déplacée de ${draggedIndex} vers ${dropIndex}`);
+                }
+            });
+        });
     },
     
     /**
