@@ -97,6 +97,14 @@ const Render = {
         weekEl.className = `card rounded-lg mb-4 overflow-hidden week-details phase-${week.phase.replace(/\s+/g, '-')}`;
         weekEl.dataset.phase = week.phase;
         
+        // 🆕 AJOUT : Détecter si la semaine contient un test
+        const hasTest = week.sessions.some(s => 
+            s.isTest || s.type?.includes('Test') || s.type?.includes('📊')
+        );
+        if (hasTest) {
+            weekEl.classList.add('has-test');
+        }
+        
         const endDate = DateUtils.addDays(week.startDate, 6);
         const tss = week.tss || 0;
         const maxPlanTSS = Math.max(...planData.plan.map(w => w.tss || 0));
@@ -108,8 +116,8 @@ const Render = {
         else if (loadPercent < 85) { loadClass = 'load-high'; loadLabel = 'Élevée'; }
         else { loadClass = 'load-very-high'; loadLabel = 'Très élevée'; }
         
-        const hasTest = week.sessions.some(s => s.isTest);
-        const testBadge = hasTest ? '<span class="ml-2 px-2 py-1 bg-purple-600 text-xs rounded">📊 Test</span>' : '';
+        // 🆕 MODIFICATION : Badge test amélioré
+        const testBadge = hasTest ? '<span class="test-badge ml-2 px-2 py-1 bg-purple-600 text-xs rounded font-semibold">📊 TEST</span>' : '';
         
         weekEl.innerHTML = `
             <summary class="p-4 cursor-pointer hover:bg-gray-800">
@@ -168,6 +176,12 @@ const Render = {
         sessionEl.dataset.dayIndex = dayIndex;
         sessionEl.dataset.weekIndex = weekIndex;
         
+        // 🆕 AJOUT : Classe spéciale pour les tests
+        if (session.isTest || session.type?.includes('Test') || session.type?.includes('📊')) {
+            sessionEl.classList.add('test-session');
+            sessionEl.setAttribute('data-type', 'test');
+        }
+        
         let detailsHtml = '';
         if (session.structure) {
             detailsHtml = `<ul class="text-sm text-gray-400 mt-1">
@@ -180,6 +194,7 @@ const Render = {
             detailsHtml = `<p class="text-sm text-gray-400 mt-1">${session.details || ''}</p>`;
         }
         
+        // 🆕 MODIFICATION : Emoji test mieux visible
         const testIcon = session.isTest ? ' 📊' : '';
         sessionEl.innerHTML = `
             <p class="font-bold text-white pointer-events-none">${CONFIG.fullDayNames[dayIndex].substring(0,3)}: ${session.type}${testIcon} (~${(session.distance || 0).toFixed(1)} km)</p>
@@ -237,11 +252,17 @@ const Render = {
             else if (week.tss < maxTSS * 0.85) loadClass = 'load-high';
             else loadClass = 'load-very-high';
             
+            // 🆕 AJOUT : Marqueur visuel pour les semaines de test
+            const hasTest = week.sessions.some(s => s.isTest || s.type?.includes('Test'));
+            if (hasTest) {
+                bar.classList.add('test-week-bar');
+            }
+            
             bar.className = `chart-bar ${loadClass}`;
             bar.style.left = `${index * (barWidth + 4)}px`;
             bar.style.width = `${barWidth}px`;
             bar.style.height = `${heightPercent}%`;
-            bar.title = `S${week.weekNumber}: ${Math.round(week.tss)} TSS - ${week.totalKm}km - ${week.phase}`;
+            bar.title = `S${week.weekNumber}: ${Math.round(week.tss)} TSS - ${week.totalKm}km - ${week.phase}${hasTest ? ' - 📊 TEST' : ''}`;
             
             bar.addEventListener('click', () => {
                 const weekEl = document.querySelector(`[data-week-index="${index}"]`);
