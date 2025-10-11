@@ -1,66 +1,319 @@
-// ============================================================================
-// SESSION MANAGER V9 - OPTIMISÉ AVEC DIAGNOSTIC
-// ============================================================================
-// Gestion complète des séances avec validation des allures et debug amélioré
-// Basé sur le diagnostic: allures correctement calculées (E: 6:13/km, M: 5:01/km)
+/**
+ * ================================================
+ * js/ui/sessionManager.js - Gestion des séances V9
+ * ================================================
+ * Version corrigée avec getPaceValue() pour résoudre le bug N/A
+ */
 
-import { formatPace, formatDistance } from '../utils/formatters.js';
-
-class SessionManager {
-  constructor() {
-    this.sessions = [];
-    this.paces = null;
-    this.debugMode = false; // Activable via window.DEBUG = true
-  }
-
-  // ========================================================================
-  // INITIALISATION & CONFIGURATION
-  // ========================================================================
-
-  initialize(paces) {
-    this.paces = paces;
-    this.validatePaces();
+const SessionManager = {
+    // Variables globales pour le modal structuré
+    currentSteps: [],
+    currentPaces: null,
     
-    if (this.debugMode) {
-      console.group('🏃 SessionManager initialized');
-      this.debugPaces();
-      console.groupEnd();
-    }
-  }
-
-  // ========================================================================
-  // VALIDATION DES ALLURES
-  // ========================================================================
-
-  validatePaces() {
-    if (!this.paces) {
-      console.error('❌ Aucune allure définie');
-      return false;
-    }
-
-    const required = ['E_low', 'E_high', 'M', 'T', 'I', 'R'];
-    const missing = required.filter(key => !this.paces[key]);
+    /**
+     * Initialiser les événements
+     */
+    init() {
+        console.log('🔧 Initialisation de SessionManager V9');
+        this.setupDeleteButtons();
+        this.setupAddButton();
+    },
     
-    if (missing.length > 0) {
-      console.error(`❌ Allures manquantes: ${missing.join(', ')}`);
-      return false;
-    }
-
-    // Vérifier la cohérence (R < I < T < M < E_high < E_low)
-    const order = ['R', 'I', 'T', 'M', 'E_high', 'E_low'];
-    for (let i = 0; i < order.length - 1; i++) {
-      const current = this.paces[order[i]];
-      const next = this.paces[order[i + 1]];
-      
-      if (current >= next) {
-        // Parser l'allure - utiliser E_low/E_high au lieu de juste 'E'
+    /**
+     * Obtenir l'allure correcte depuis l'objet paces
+     * IMPORTANT : Résout le bug N/A en mappant E -> E_low
+     */
+    getPaceValue(paces, paceKey) {
+        // Mapping des clés courtes vers les clés du STATE
+        const paceMap = {
+            'E': 'E_low',    // Endurance facile
+            'M': 'M',        // Marathon
+            'T': 'T',        // Tempo/Seuil
+            'I': 'I',        // Intervalle
+            'R': 'R',        // Répétition
+            'C': 'C'         // Course
+        };
+        
+        const actualKey = paceMap[paceKey] || paceKey;
+        const paceValue = paces[actualKey];
+        
+        if (!paceValue) {
+            console.warn(`⚠️ Allure non trouvée pour: ${paceKey} (cherché: ${actualKey})`);
+            console.log('=== DIAGNOSTIC ===');
+            console.log('1. Clé demandée:', paceKey);
+            console.log('2. Clé mappée:', actualKey);
+            console.log('3. Clés disponibles:', Object.keys(paces));
+            console.log('4. Valeur trouvée:', paceValue);
+            return paces.E_low || 360; // Fallback sur endurance ou 6:00/km
+        }
+        
+        return paceValue;
+    },
+    
+    /**
+     * Configurer les boutons de suppression
+     */
+    setupDeleteButtons() {
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('delete-session-btn')) {
+                e.stopPropagation();
+                e.preventDefault();
+                const sessionCard = e.target.closest('.session-card');
+                if (sessionCard) {
+                    SessionManager.deleteSession(sessionCard, e);
+                }
+            }
+        }, true);
+    },
+    
+    /**
+     * Configurer le bouton d'ajout
+     */
+    setupAddButton() {
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('add-session-btn')) {
+                const emptySlot = e.target.closest('.empty-day-slot');
+                if (emptySlot) {
+                    const weekContent = emptySlot.closest('.week-content');
+                    const weekIndex = parseInt(weekContent.dataset.weekIndex);
+                    const dayIndex = parseInt(emptySlot.dataset.dayIndex);
+                    SessionManager.showAddSessionModal(weekIndex, dayIndex);
+                }
+            }
+        });
+    },
+    
+    /**
+     * Supprimer une séance
+     */
+    deleteSession(sessionCard, event) {
+        if (event) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+        }
+        
+        const weekIndex = parseInt(sessionCard.dataset.weekIndex);
+        const dayIndex = parseInt(sessionCard.dataset.dayIndex);
+        const sessionIndex = parseInt(sessionCard.dataset.sessionIndex);
+        
+        const week = STATE.currentPlanData.plan[weekIndex];
+        const session = week.sessions[sessionIndex];
+        
+        const confirmDelete = confirm(
+            `Supprimer cette séance ?\n\n` +
+            `${CONFIG.fullDayNames[dayIndex]} : ${session.type}\n` +
+            `Distance : ${session.distance?.toFixed(1) || '?'} km`
+        );
+        
+        if (!confirmDelete) return;
+        
+        week.sessions.splice(sessionIndex, 1);
+        week.totalKm = week.sessions.reduce((sum, s) => sum + (s.distance || 0), 0);
+        week.tss = week.sessions.reduce((sum, s) => 
+            sum + VDOT.calculateTSS(s, STATE.currentPlanData.paces), 0
+        );
+        
+        SessionManager.refreshPlan();
+        console.log(`✅ Séance supprimée : Semaine ${weekIndex + 1}, ${CONFIG.fullDayNames[dayIndex]}`);
+    },
+    
+    /**
+     * Afficher le modal d'ajout de séance
+     */
+    showAddSessionModal(weekIndex, dayIndex) {
+        const week = STATE.currentPlanData.plan[weekIndex];
+        const paces = STATE.currentPlanData.paces;
+        
+        const modal = SessionManager.createAddSessionModal(weekIndex, dayIndex, week, paces);
+        document.body.appendChild(modal);
+        
+        setTimeout(() => modal.classList.add('show'), 10);
+    },
+    
+    /**
+     * Afficher le modal d'édition de séance
+     */
+    showEditSessionModal(sessionCard) {
+        const weekIndex = parseInt(sessionCard.dataset.weekIndex);
+        const sessionIndex = parseInt(sessionCard.dataset.sessionIndex);
+        const dayIndex = parseInt(sessionCard.dataset.dayIndex);
+        
+        const week = STATE.currentPlanData.plan[weekIndex];
+        const session = week.sessions[sessionIndex];
+        const paces = STATE.currentPlanData.paces;
+        
+        const modal = SessionManager.createEditSessionModal(weekIndex, sessionIndex, dayIndex, session, week, paces);
+        document.body.appendChild(modal);
+        
+        setTimeout(() => modal.classList.add('show'), 10);
+    },
+    
+    /**
+     * Créer le modal d'édition
+     */
+    createEditSessionModal(weekIndex, sessionIndex, dayIndex, session, week, paces) {
+        const modal = document.createElement('div');
+        modal.className = 'session-modal-overlay';
+        modal.innerHTML = `
+            <div class="session-modal-structured">
+                <div class="session-modal-header">
+                    <h3>✏️ Modifier la séance</h3>
+                    <p class="text-sm">Semaine ${week.weekNumber} - ${CONFIG.fullDayNames[dayIndex]} ${DateUtils.format(DateUtils.addDays(week.startDate, dayIndex))}</p>
+                    <button class="close-modal-btn" onclick="this.closest('.session-modal-overlay').remove()">✕</button>
+                </div>
+                
+                <div class="session-modal-body-structured">
+                    <div class="session-steps-container" id="session-steps">
+                        <!-- Les étapes seront ajoutées ici -->
+                    </div>
+                    
+                    <div class="session-actions">
+                        <button class="btn-add-step" onclick="SessionManager.addStepToSession()">
+                            ➕ Ajouter une étape
+                        </button>
+                    </div>
+                    
+                    <div class="session-summary">
+                        <div class="summary-item">
+                            <span class="summary-label">Durée totale estimée</span>
+                            <span class="summary-value" id="total-duration">0:00</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Distance estimée</span>
+                            <span class="summary-value" id="total-distance">0.00 km</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="session-modal-footer">
+                    <button class="btn-secondary" onclick="this.closest('.session-modal-overlay').remove()">
+                        Annuler
+                    </button>
+                    <button class="btn-primary" onclick="SessionManager.updateStructuredSession(${weekIndex}, ${sessionIndex}, ${dayIndex})">
+                        💾 Enregistrer les modifications
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.remove();
+        });
+        
+        setTimeout(() => {
+            SessionManager.currentSteps = [];
+            SessionManager.currentPaces = paces;
+            SessionManager.loadSessionSteps(session);
+        }, 100);
+        
+        return modal;
+    },
+    
+    /**
+     * Charger les étapes d'une séance existante
+     */
+    loadSessionSteps(session) {
+        const steps = [];
+        
+        if (session.structure?.echauffement) {
+            steps.push(SessionManager.parseStepFromDescription('Échauffement', session.structure.echauffement));
+        }
+        
+        if (session.structure?.bloc) {
+            const isRepeat = session.structure.bloc.includes('x');
+            if (isRepeat) {
+                const step = SessionManager.parseStepFromDescription(session.type, session.structure.bloc, true);
+                if (session.structure?.recuperation) {
+                    step.recovery = SessionManager.parseRecoveryFromDescription(session.structure.recuperation);
+                }
+                steps.push(step);
+            } else {
+                steps.push(SessionManager.parseStepFromDescription(session.type, session.structure.bloc));
+            }
+        }
+        
+        if (session.structure?.retourAuCalme) {
+            steps.push(SessionManager.parseStepFromDescription('Retour au calme', session.structure.retourAuCalme));
+        }
+        
+        if (steps.length === 0) {
+            steps.push({
+                id: `step-${Date.now()}`,
+                type: session.type || 'Séance',
+                durationType: 'distance',
+                duration: 30,
+                distance: session.distance || 10,
+                distanceUnit: 'km',
+                pace: 'E',
+                repeat: 1,
+                isRepeat: false,
+                recovery: {
+                    type: 'time',
+                    value: 90,
+                    unit: 'sec',
+                    intensity: 'none'
+                }
+            });
+        }
+        
+        SessionManager.currentSteps = steps;
+        SessionManager.renderSteps();
+        SessionManager.updateSummary();
+    },
+    
+    /**
+     * Parser une description d'étape
+     */
+    parseStepFromDescription(name, description, isRepeat = false) {
+        const step = {
+            id: `step-${Date.now()}-${Math.random()}`,
+            type: name,
+            durationType: 'time',
+            duration: 20,
+            distance: 1,
+            distanceUnit: 'km',
+            pace: 'E',
+            repeat: 1,
+            isRepeat: isRepeat,
+            recovery: {
+                type: 'time',
+                value: 90,
+                unit: 'sec',
+                intensity: 'none'
+            }
+        };
+        
+        const repeatMatch = description.match(/(\d+)x\s*/);
+        if (repeatMatch) {
+            step.repeat = parseInt(repeatMatch[1]);
+        }
+        
+        const timeMatch = description.match(/(\d+)\s*min(?!$|\s*à)/i);
+        if (timeMatch) {
+            step.durationType = 'time';
+            step.duration = parseInt(timeMatch[1]);
+        }
+        
+        const distanceMetersMatch = description.match(/(?<!\d)(\d+(?:\.\d+)?)\s*m(?!\s*min)(?=\s|$|à)/i);
+        if (distanceMetersMatch && !timeMatch) {
+            step.durationType = 'distance';
+            step.distance = parseFloat(distanceMetersMatch[1]);
+            step.distanceUnit = 'm';
+        }
+        
+        const distanceKmMatch = description.match(/(\d+(?:\.\d+)?)\s*km(?=\s|$|à)/i);
+        if (distanceKmMatch && !timeMatch && !distanceMetersMatch) {
+            step.durationType = 'distance';
+            step.distance = parseFloat(distanceKmMatch[1]);
+            step.distanceUnit = 'km';
+        }
+        
         const paces = SessionManager.currentPaces;
         if (!paces) {
             step.pace = 'E';
             return step;
         }
         
-        // Tester chaque allure disponible
         if (paces.R && description.includes(Formatters.secondsToPace(paces.R))) step.pace = 'R';
         else if (paces.I && description.includes(Formatters.secondsToPace(paces.I))) step.pace = 'I';
         else if (paces.T && description.includes(Formatters.secondsToPace(paces.T))) step.pace = 'T';
@@ -68,7 +321,7 @@ class SessionManager {
         else if (paces.C && description.includes(Formatters.secondsToPace(paces.C))) step.pace = 'C';
         else if (paces.E_high && description.includes(Formatters.secondsToPace(paces.E_high))) step.pace = 'E';
         else if (paces.E_low && description.includes(Formatters.secondsToPace(paces.E_low))) step.pace = 'E';
-        else step.pace = 'E'; // Défaut sur endurance
+        else step.pace = 'E';
         
         return step;
     },
@@ -84,7 +337,6 @@ class SessionManager {
             intensity: 'none'
         };
         
-        // Parser le temps (ex: "90 sec", "2 min")
         const timeSecMatch = description.match(/(\d+)\s*sec/i);
         if (timeSecMatch) {
             recovery.type = 'time';
@@ -99,7 +351,6 @@ class SessionManager {
             recovery.unit = 'min';
         }
         
-        // Parser la distance (ex: "200m", "0.4km")
         const distanceMetersMatch = description.match(/(\d+)\s*m(?!\s*min)/i);
         if (distanceMetersMatch) {
             recovery.type = 'distance';
@@ -114,14 +365,12 @@ class SessionManager {
             recovery.unit = 'km';
         }
         
-        // Parser l'intensité - utiliser le mapping correct
         const paces = SessionManager.currentPaces;
         if (!paces) {
             recovery.intensity = 'none';
             return recovery;
         }
         
-        // Tester chaque allure disponible
         if (paces.E_low && description.includes(Formatters.secondsToPace(paces.E_low))) {
             recovery.intensity = 'E';
         } else if (paces.E_high && description.includes(Formatters.secondsToPace(paces.E_high))) {
@@ -134,437 +383,706 @@ class SessionManager {
             recovery.intensity = 'none';
         }
         
-        return recovery;console.warn(
-          `⚠️ Incohérence allures: ${order[i]} (${formatPace(current)}) ` +
-          `devrait être plus rapide que ${order[i + 1]} (${formatPace(next)})`
-        );
-      }
-    }
-
-    return true;
-  }
-
-  // ========================================================================
-  // DEBUG & DIAGNOSTICS
-  // ========================================================================
-
-  debugPaces(label = 'Allures actuelles') {
-    console.group(`📊 ${label}`);
-    console.table({
-      'Récupération (R)': formatPace(this.paces.R),
-      'Intervalle (I)': formatPace(this.paces.I),
-      'Tempo (T)': formatPace(this.paces.T),
-      'Marathon (M)': formatPace(this.paces.M),
-      'Endurance haute (E_high)': formatPace(this.paces.E_high),
-      'Endurance basse (E_low)': formatPace(this.paces.E_low)
-    });
-    console.groupEnd();
-  }
-
-  debugSession(session) {
-    console.group(`🔍 Détails séance: ${session.name}`);
-    console.log('Type:', session.type);
-    console.log('Durée:', session.duration, 'min');
-    console.log('Distance:', session.distance ? formatDistance(session.distance) : 'N/A');
+        return recovery;
+    },
     
-    if (session.steps && session.steps.length > 0) {
-      console.log('Étapes:');
-      session.steps.forEach((step, i) => {
-        console.log(`  ${i + 1}. ${step.description}`);
-      });
-    }
-    
-    console.groupEnd();
-  }
-
-  // ========================================================================
-  // CRÉATION DE SÉANCES
-  // ========================================================================
-
-  createSession(type, params = {}) {
-    const sessionTemplates = {
-      'endurance': this.createEnduranceSession.bind(this),
-      'vma': this.createVMASession.bind(this),
-      'seuil': this.createThresholdSession.bind(this),
-      'sortie_longue': this.createLongRunSession.bind(this),
-      'recuperation': this.createRecoverySession.bind(this),
-      'test': this.createTestSession.bind(this)
-    };
-
-    const creator = sessionTemplates[type];
-    if (!creator) {
-      console.error(`❌ Type de séance inconnu: ${type}`);
-      return null;
-    }
-
-    const session = creator(params);
-    
-    if (this.debugMode) {
-      this.debugSession(session);
-    }
-
-    return session;
-  }
-
-  // ========================================================================
-  // TEMPLATES DE SÉANCES
-  // ========================================================================
-
-  createEnduranceSession(params) {
-    const duration = params.duration || 45;
-    const pace = params.useHighPace ? this.paces.E_high : this.paces.E_low;
-    const distance = (duration * 60) / pace; // en mètres
-
-    return {
-      id: this.generateId(),
-      type: 'endurance',
-      name: `Endurance ${duration}min`,
-      duration,
-      distance: Math.round(distance),
-      intensity: 'facile',
-      steps: [
-        {
-          type: 'warmup',
-          duration: 10,
-          pace: this.paces.E_low,
-          description: `Échauffement ${formatPace(this.paces.E_low)}`
-        },
-        {
-          type: 'main',
-          duration: duration - 10,
-          pace,
-          description: `Allure ${formatPace(pace)}`
+    /**
+     * Mettre à jour une séance existante
+     */
+    updateStructuredSession(weekIndex, sessionIndex, dayIndex) {
+        if (!SessionManager.currentSteps || SessionManager.currentSteps.length === 0) {
+            alert('Veuillez ajouter au moins une étape à la séance');
+            return;
         }
-      ]
-    };
-  }
-
-  createVMASession(params) {
-    const repCount = params.repCount || 8;
-    const repDuration = params.repDuration || 30; // secondes
-    const recoveryDuration = params.recoveryDuration || repDuration;
-
-    return {
-      id: this.generateId(),
-      type: 'vma',
-      name: `VMA ${repCount}x${repDuration}"`,
-      duration: 15 + Math.ceil((repCount * (repDuration + recoveryDuration)) / 60),
-      intensity: 'difficile',
-      steps: [
-        {
-          type: 'warmup',
-          duration: 15,
-          pace: this.paces.E_low,
-          description: `Échauffement 15min à ${formatPace(this.paces.E_low)}`
-        },
-        {
-          type: 'interval',
-          repetitions: repCount,
-          workDuration: repDuration,
-          workPace: this.paces.I,
-          recoveryDuration,
-          recoveryPace: this.paces.R,
-          description: `${repCount} × ${repDuration}" à ${formatPace(this.paces.I)} (récup ${recoveryDuration}" à ${formatPace(this.paces.R)})`
-        },
-        {
-          type: 'cooldown',
-          duration: 10,
-          pace: this.paces.E_low,
-          description: `Retour au calme 10min`
+        
+        const week = STATE.currentPlanData.plan[weekIndex];
+        const paces = STATE.currentPlanData.paces;
+        
+        if (!paces) {
+            console.error('⚠️ Paces non disponibles');
+            alert('Erreur : Les allures ne sont pas disponibles');
+            return;
         }
-      ]
-    };
-  }
-
-  createThresholdSession(params) {
-    const blocks = params.blocks || 2;
-    const blockDuration = params.blockDuration || 10; // minutes
-    const recoveryDuration = params.recoveryDuration || 3;
-
-    return {
-      id: this.generateId(),
-      type: 'seuil',
-      name: `Seuil ${blocks}×${blockDuration}min`,
-      duration: 15 + (blocks * blockDuration) + ((blocks - 1) * recoveryDuration) + 10,
-      intensity: 'modéré',
-      steps: [
-        {
-          type: 'warmup',
-          duration: 15,
-          pace: this.paces.E_low,
-          description: `Échauffement 15min`
-        },
-        {
-          type: 'tempo',
-          repetitions: blocks,
-          workDuration: blockDuration * 60,
-          workPace: this.paces.T,
-          recoveryDuration: recoveryDuration * 60,
-          recoveryPace: this.paces.E_low,
-          description: `${blocks} × ${blockDuration}min à ${formatPace(this.paces.T)} (récup ${recoveryDuration}min)`
-        },
-        {
-          type: 'cooldown',
-          duration: 10,
-          pace: this.paces.E_low,
-          description: `Retour au calme 10min`
-        }
-      ]
-    };
-  }
-
-  createLongRunSession(params) {
-    const duration = params.duration || 90;
-    const progressiveEnd = params.progressive || false;
+        
+        let totalDistance = 0;
+        let maxIntensity = 1;
+        
+        SessionManager.currentSteps.forEach(step => {
+            const repeat = step.isRepeat ? step.repeat : 1;
+            
+            let stepDistanceKm = 0;
+            if (step.durationType === 'time') {
+                const paceSeconds = SessionManager.getPaceValue(paces, step.pace);
+                stepDistanceKm = (step.duration * 60 / paceSeconds) * repeat;
+            } else {
+                stepDistanceKm = (step.distanceUnit === 'm' ? step.distance / 1000 : step.distance) * repeat;
+            }
+            
+            totalDistance += stepDistanceKm;
+            
+            if (step.isRepeat && step.recovery && repeat > 1) {
+                const recupCount = repeat - 1;
+                if (step.recovery.type === 'distance') {
+                    const recupDistanceKm = step.recovery.unit === 'm' ? 
+                        step.recovery.value / 1000 : step.recovery.value;
+                    totalDistance += recupDistanceKm * recupCount;
+                } else if (step.recovery.intensity !== 'none') {
+                    const recupMinutes = step.recovery.unit === 'min' ? 
+                        step.recovery.value : step.recovery.value / 60;
+                    const recupPace = SessionManager.getPaceValue(paces, step.recovery.intensity);
+                    totalDistance += (recupMinutes * 60 / recupPace) * recupCount;
+                }
+            }
+            
+            const intensityMap = { E: 1, M: 2, T: 3, I: 4, R: 4, C: 3 };
+            maxIntensity = Math.max(maxIntensity, intensityMap[step.pace] || 1);
+        });
+        
+        const sessionName = SessionManager.currentSteps[0]?.type || 'Séance personnalisée';
+        
+        const structure = {};
+        SessionManager.currentSteps.forEach((step, index) => {
+            const repeat = step.isRepeat ? step.repeat : 1;
+            const paceValue = SessionManager.getPaceValue(paces, step.pace);
+            const paceStr = Formatters.secondsToPace(paceValue);
+            
+            let desc;
+            if (step.durationType === 'time') {
+                desc = repeat > 1 
+                    ? `${repeat}x ${step.duration} min à ${paceStr}`
+                    : `${step.duration} min à ${paceStr}`;
+            } else {
+                const distValue = step.distanceUnit === 'm' ? 
+                    `${step.distance}m` : `${step.distance}km`;
+                desc = repeat > 1
+                    ? `${repeat}x ${distValue} à ${paceStr}`
+                    : `${distValue} à ${paceStr}`;
+            }
+            
+            if (step.isRepeat && step.recovery) {
+                let recupDesc = '';
+                if (step.recovery.type === 'time') {
+                    recupDesc = step.recovery.unit === 'min' ?
+                        `${step.recovery.value} min` : `${step.recovery.value} sec`;
+                } else {
+                    recupDesc = step.recovery.unit === 'm' ?
+                        `${step.recovery.value}m` : `${step.recovery.value}km`;
+                }
+                
+                if (step.recovery.intensity !== 'none') {
+                    const recupPaceValue = SessionManager.getPaceValue(paces, step.recovery.intensity);
+                    const recupPaceStr = Formatters.secondsToPace(recupPaceValue);
+                    structure.recuperation = `${recupDesc} à ${recupPaceStr}`;
+                } else {
+                    structure.recuperation = `${recupDesc} trot`;
+                }
+            }
+            
+            if (index === 0) structure.echauffement = desc;
+            else if (index === SessionManager.currentSteps.length - 1) structure.retourAuCalme = desc;
+            else structure.bloc = (structure.bloc ? structure.bloc + ' + ' : '') + desc;
+        });
+        
+        week.sessions[sessionIndex] = {
+            type: sessionName,
+            intensity: maxIntensity,
+            structure: structure,
+            distance: totalDistance,
+            day: dayIndex,
+            fullDate: `${CONFIG.fullDayNames[dayIndex]} ${DateUtils.format(DateUtils.addDays(week.startDate, dayIndex))}`
+        };
+        
+        week.totalKm = Math.round(week.sessions.reduce((sum, s) => sum + (s.distance || 0), 0));
+        week.tss = Math.round(week.sessions.reduce((sum, s) => 
+            sum + VDOT.calculateTSS(s, paces), 0
+        ));
+        
+        document.querySelector('.session-modal-overlay').remove();
+        SessionManager.refreshPlan();
+        
+        console.log(`✅ Séance modifiée : Semaine ${weekIndex + 1}, ${CONFIG.fullDayNames[dayIndex]}`);
+    },
     
-    const steps = [
-      {
-        type: 'warmup',
-        duration: 15,
-        pace: this.paces.E_low,
-        description: `Début tranquille 15min à ${formatPace(this.paces.E_low)}`
-      }
-    ];
-
-    if (progressiveEnd) {
-      steps.push(
-        {
-          type: 'main',
-          duration: duration - 30,
-          pace: this.paces.E_high,
-          description: `Allure stable ${duration - 30}min à ${formatPace(this.paces.E_high)}`
-        },
-        {
-          type: 'progressive',
-          duration: 15,
-          startPace: this.paces.E_high,
-          endPace: this.paces.M,
-          description: `Finish progressif 15min (${formatPace(this.paces.E_high)} → ${formatPace(this.paces.M)})`
-        }
-      );
-    } else {
-      steps.push({
-        type: 'main',
-        duration: duration - 15,
-        pace: this.paces.E_high,
-        description: `Allure constante ${duration - 15}min à ${formatPace(this.paces.E_high)}`
-      });
-    }
-
-    const distance = (duration * 60) / this.paces.E_high;
-
-    return {
-      id: this.generateId(),
-      type: 'sortie_longue',
-      name: `Sortie longue ${duration}min`,
-      duration,
-      distance: Math.round(distance),
-      intensity: 'modéré',
-      steps
-    };
-  }
-
-  createRecoverySession(params) {
-    const duration = params.duration || 30;
-    const distance = (duration * 60) / this.paces.E_low;
-
-    return {
-      id: this.generateId(),
-      type: 'recuperation',
-      name: `Récupération ${duration}min`,
-      duration,
-      distance: Math.round(distance),
-      intensity: 'très_facile',
-      steps: [
-        {
-          type: 'easy',
-          duration,
-          pace: this.paces.E_low,
-          description: `Course très facile ${formatPace(this.paces.E_low)} - Privilégier les sensations`
-        }
-      ]
-    };
-  }
-
-  createTestSession(params) {
-    const distance = params.distance || 5000; // 5km par défaut
-    const estimatedTime = distance / this.paces.T; // Estimation à allure seuil
-    const duration = Math.ceil(estimatedTime / 60);
-
-    return {
-      id: this.generateId(),
-      type: 'test',
-      name: `Test ${formatDistance(distance)}`,
-      duration: 15 + duration + 10,
-      distance,
-      intensity: 'difficile',
-      isTest: true,
-      steps: [
-        {
-          type: 'warmup',
-          duration: 15,
-          pace: this.paces.E_low,
-          description: `Échauffement complet 15min + accélérations`
-        },
-        {
-          type: 'test',
-          distance,
-          targetPace: this.paces.T,
-          description: `Test ${formatDistance(distance)} - Effort maximal contrôlé`
-        },
-        {
-          type: 'cooldown',
-          duration: 10,
-          pace: this.paces.E_low,
-          description: `Retour au calme 10min`
-        }
-      ]
-    };
-  }
-
-  // ========================================================================
-  // GESTION DES SESSIONS
-  // ========================================================================
-
-  addSession(session) {
-    this.sessions.push(session);
-    return session.id;
-  }
-
-  getSession(id) {
-    return this.sessions.find(s => s.id === id);
-  }
-
-  updateSession(id, updates) {
-    const session = this.getSession(id);
-    if (!session) {
-      console.error(`❌ Séance introuvable: ${id}`);
-      return null;
-    }
-
-    Object.assign(session, updates);
+    /**
+     * Créer le HTML du modal d'ajout
+     */
+    createAddSessionModal(weekIndex, dayIndex, week, paces) {
+        const modal = document.createElement('div');
+        modal.className = 'session-modal-overlay';
+        modal.innerHTML = `
+            <div class="session-modal-structured">
+                <div class="session-modal-header">
+                    <h3>➕ Ajouter une séance</h3>
+                    <p class="text-sm">Semaine ${week.weekNumber} - ${CONFIG.fullDayNames[dayIndex]} ${DateUtils.format(DateUtils.addDays(week.startDate, dayIndex))}</p>
+                    <button class="close-modal-btn" onclick="this.closest('.session-modal-overlay').remove()">✕</button>
+                </div>
+                
+                <div class="session-modal-body-structured">
+                    <div class="session-steps-container" id="session-steps">
+                        <!-- Les étapes seront ajoutées ici -->
+                    </div>
+                    
+                    <div class="session-actions">
+                        <button class="btn-add-step" onclick="SessionManager.addStepToSession()">
+                            ➕ Ajouter une étape
+                        </button>
+                    </div>
+                    
+                    <div class="session-summary">
+                        <div class="summary-item">
+                            <span class="summary-label">Durée totale estimée</span>
+                            <span class="summary-value" id="total-duration">0:00</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Distance estimée</span>
+                            <span class="summary-value" id="total-distance">0.00 km</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="session-modal-footer">
+                    <button class="btn-secondary" onclick="this.closest('.session-modal-overlay').remove()">
+                        Annuler
+                    </button>
+                    <button class="btn-primary" onclick="SessionManager.saveStructuredSession(${weekIndex}, ${dayIndex})">
+                        💾 Enregistrer l'entraînement
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.remove();
+        });
+        
+        setTimeout(() => {
+            SessionManager.currentSteps = [];
+            SessionManager.currentPaces = paces;
+            SessionManager.addStepToSession('Échauffement');
+        }, 100);
+        
+        return modal;
+    },
     
-    if (this.debugMode) {
-      console.log(`✅ Séance mise à jour: ${id}`);
-      this.debugSession(session);
-    }
-
-    return session;
-  }
-
-  deleteSession(id) {
-    const index = this.sessions.findIndex(s => s.id === id);
-    if (index === -1) {
-      console.error(`❌ Séance introuvable: ${id}`);
-      return false;
-    }
-
-    this.sessions.splice(index, 1);
-    return true;
-  }
-
-  // ========================================================================
-  // STATISTIQUES
-  // ========================================================================
-
-  getWeeklyStats(week) {
-    const weekSessions = this.sessions.filter(s => s.week === week);
+    /**
+     * Ajouter une étape à la séance
+     */
+    addStepToSession(defaultType = 'Course à pied') {
+        const stepId = `step-${Date.now()}`;
+        const step = {
+            id: stepId,
+            type: defaultType,
+            durationType: 'time',
+            duration: defaultType === 'Échauffement' ? 20 : 10,
+            distance: 1,
+            distanceUnit: 'km',
+            pace: 'E',
+            repeat: 1,
+            isRepeat: false,
+            recovery: {
+                type: 'time',
+                value: 90,
+                unit: 'sec',
+                intensity: 'none'
+            }
+        };
+        
+        SessionManager.currentSteps.push(step);
+        SessionManager.renderSteps();
+        SessionManager.updateSummary();
+    },
     
-    return {
-      totalDuration: weekSessions.reduce((sum, s) => sum + s.duration, 0),
-      totalDistance: weekSessions.reduce((sum, s) => sum + (s.distance || 0), 0),
-      sessionCount: weekSessions.length,
-      intensityBreakdown: this.getIntensityBreakdown(weekSessions)
-    };
-  }
-
-  getIntensityBreakdown(sessions) {
-    const breakdown = {
-      'très_facile': 0,
-      'facile': 0,
-      'modéré': 0,
-      'difficile': 0
-    };
-
-    sessions.forEach(s => {
-      breakdown[s.intensity] = (breakdown[s.intensity] || 0) + s.duration;
-    });
-
-    return breakdown;
-  }
-
-  // ========================================================================
-  // UTILITAIRES
-  // ========================================================================
-
-  generateId() {
-    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  exportSessions() {
-    return {
-      sessions: this.sessions,
-      paces: this.paces,
-      exportDate: new Date().toISOString()
-    };
-  }
-
-  importSessions(data) {
-    if (!data.sessions || !data.paces) {
-      console.error('❌ Format de données invalide');
-      return false;
-    }
-
-    this.sessions = data.sessions;
-    this.paces = data.paces;
+    /**
+     * Afficher toutes les étapes
+     */
+    renderSteps() {
+        const container = document.getElementById('session-steps');
+        if (!container) return;
+        
+        const paces = SessionManager.currentPaces;
+        if (!paces) {
+            console.error('⚠️ currentPaces non défini');
+            return;
+        }
+        
+        container.innerHTML = SessionManager.currentSteps.map(step => `
+            <div class="session-step" data-step-id="${step.id}">
+                <div class="step-header">
+                    <div class="step-drag-handle">⋮⋮</div>
+                    <input type="text" class="step-title" value="${step.type}" 
+                           onchange="SessionManager.updateStep('${step.id}', 'type', this.value)"
+                           placeholder="Nom de l'étape">
+                    <button class="step-delete" onclick="SessionManager.deleteStep('${step.id}')">
+                        🗑️
+                    </button>
+                </div>
+                
+                <div class="step-body">
+                    ${step.isRepeat ? `
+                        <div class="step-row">
+                            <label>Répéter</label>
+                            <div class="step-input-group">
+                                <input type="number" value="${step.repeat}" min="1" max="50"
+                                       onchange="SessionManager.updateStep('${step.id}', 'repeat', this.value)">
+                                <span>Fois</span>
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    <div class="step-row">
+                        <label>Durée/Distance</label>
+                        <div class="step-toggle-group">
+                            <button class="step-toggle ${step.durationType === 'time' ? 'active' : ''}"
+                                    onclick="SessionManager.updateStep('${step.id}', 'durationType', 'time')">
+                                Temps
+                            </button>
+                            <button class="step-toggle ${step.durationType === 'distance' ? 'active' : ''}"
+                                    onclick="SessionManager.updateStep('${step.id}', 'durationType', 'distance')">
+                                Distance
+                            </button>
+                        </div>
+                    </div>
+                    
+                    ${step.durationType === 'time' ? `
+                        <div class="step-row">
+                            <label>Temps total</label>
+                            <div class="step-input-group">
+                                <input type="number" value="${step.duration}" min="1" max="300"
+                                       onchange="SessionManager.updateStep('${step.id}', 'duration', this.value)">
+                                <span>min</span>
+                            </div>
+                        </div>
+                    ` : `
+                        <div class="step-row">
+                            <label>Distance totale</label>
+                            <div class="step-input-group">
+                                <input type="number" value="${step.distance}" min="0.1" max="50000" step="0.1"
+                                       onchange="SessionManager.updateStep('${step.id}', 'distance', this.value)">
+                                <select class="step-unit-select"
+                                        onchange="SessionManager.updateStep('${step.id}', 'distanceUnit', this.value)">
+                                    <option value="km" ${step.distanceUnit === 'km' ? 'selected' : ''}>km</option>
+                                    <option value="m" ${step.distanceUnit === 'm' ? 'selected' : ''}>m</option>
+                                </select>
+                            </div>
+                        </div>
+                    `}
+                    
+                    <div class="step-row">
+                        <label>Allure</label>
+                        <select class="step-select" 
+                                onchange="SessionManager.updateStep('${step.id}', 'pace', this.value)">
+                            <option value="E" ${step.pace === 'E' ? 'selected' : ''}>Endurance (${paces.E_low ? Formatters.secondsToPace(paces.E_low) : 'N/A'})</option>
+                            <option value="M" ${step.pace === 'M' ? 'selected' : ''}>Marathon (${paces.M ? Formatters.secondsToPace(paces.M) : 'N/A'})</option>
+                            <option value="T" ${step.pace === 'T' ? 'selected' : ''}>Seuil (${paces.T ? Formatters.secondsToPace(paces.T) : 'N/A'})</option>
+                            <option value="I" ${step.pace === 'I' ? 'selected' : ''}>Intervalle (${paces.I ? Formatters.secondsToPace(paces.I) : 'N/A'})</option>
+                            <option value="R" ${step.pace === 'R' ? 'selected' : ''}>Répétition (${paces.R ? Formatters.secondsToPace(paces.R) : 'N/A'})</option>
+                            ${paces.C ? `<option value="C" ${step.pace === 'C' ? 'selected' : ''}>Course (${Formatters.secondsToPace(paces.C)})</option>` : ''}
+                        </select>
+                    </div>
+                    
+                    ${step.isRepeat ? `
+                        <div class="step-recovery-section">
+                            <div class="step-row">
+                                <label>Récupération</label>
+                                <div class="step-toggle-group">
+                                    <button class="step-toggle ${step.recovery.type === 'time' ? 'active' : ''}"
+                                            onclick="SessionManager.updateRecovery('${step.id}', 'type', 'time')">
+                                        Temps
+                                    </button>
+                                    <button class="step-toggle ${step.recovery.type === 'distance' ? 'active' : ''}"
+                                            onclick="SessionManager.updateRecovery('${step.id}', 'type', 'distance')">
+                                        Distance
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            ${step.recovery.type === 'time' ? `
+                                <div class="step-row">
+                                    <label>Durée récup</label>
+                                    <div class="step-input-group">
+                                        <input type="number" value="${step.recovery.unit === 'min' ? step.recovery.value : step.recovery.value}" 
+                                               min="1" max="600"
+                                               onchange="SessionManager.updateRecovery('${step.id}', 'value', this.value)">
+                                        <select class="step-unit-select"
+                                                onchange="SessionManager.updateRecovery('${step.id}', 'unit', this.value)">
+                                            <option value="sec" ${step.recovery.unit === 'sec' ? 'selected' : ''}>sec</option>
+                                            <option value="min" ${step.recovery.unit === 'min' ? 'selected' : ''}>min</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            ` : `
+                                <div class="step-row">
+                                    <label>Distance récup</label>
+                                    <div class="step-input-group">
+                                        <input type="number" value="${step.recovery.value}" 
+                                               min="1" max="5000" step="1"
+                                               onchange="SessionManager.updateRecovery('${step.id}', 'value', this.value)">
+                                        <select class="step-unit-select"
+                                                onchange="SessionManager.updateRecovery('${step.id}', 'unit', this.value)">
+                                            <option value="m" ${step.recovery.unit === 'm' ? 'selected' : ''}>m</option>
+                                            <option value="km" ${step.recovery.unit === 'km' ? 'selected' : ''}>km</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            `}
+                            
+                            <div class="step-row">
+                                <label>Intensité récup</label>
+                                <select class="step-select"
+                                        onchange="SessionManager.updateRecovery('${step.id}', 'intensity', this.value)">
+                                    <option value="none" ${step.recovery.intensity === 'none' ? 'selected' : ''}>Pas de cible</option>
+                                    <option value="E" ${step.recovery.intensity === 'E' ? 'selected' : ''}>Endurance (${paces.E_low ? Formatters.secondsToPace(paces.E_low) : 'N/A'})</option>
+                                    <option value="M" ${step.recovery.intensity === 'M' ? 'selected' : ''}>Marathon (${paces.M ? Formatters.secondsToPace(paces.M) : 'N/A'})</option>
+                                    <option value="T" ${step.recovery.intensity === 'T' ? 'selected' : ''}>Seuil (${paces.T ? Formatters.secondsToPace(paces.T) : 'N/A'})</option>
+                                </select>
+                            </div>
+                        </div>
+                    ` : `
+                        <div class="step-row">
+                            <button class="btn-convert-repeat" onclick="SessionManager.convertToRepeat('${step.id}')">
+                                🔁 Convertir en répétition
+                            </button>
+                        </div>
+                    `}
+                </div>
+            </div>
+        `).join('');
+    },
     
-    console.log(`✅ ${this.sessions.length} séances importées`);
-    return true;
-  }
+    /**
+     * Mettre à jour une étape
+     */
+    updateStep(stepId, field, value) {
+        const step = SessionManager.currentSteps.find(s => s.id === stepId);
+        if (!step) return;
+        
+        step[field] = field === 'repeat' || field === 'duration' ? parseInt(value) : 
+                      field === 'distance' ? parseFloat(value) : value;
+        
+        if (field === 'durationType') {
+            if (value === 'distance') {
+                step.distance = 1;
+                step.distanceUnit = 'km';
+            }
+            SessionManager.renderSteps();
+        }
+        
+        SessionManager.updateSummary();
+    },
+    
+    /**
+     * Mettre à jour la récupération d'une étape
+     */
+    updateRecovery(stepId, field, value) {
+        const step = SessionManager.currentSteps.find(s => s.id === stepId);
+        if (!step || !step.recovery) return;
+        
+        step.recovery[field] = field === 'value' ? 
+            (step.recovery.type === 'time' && step.recovery.unit === 'sec' ? parseInt(value) : parseFloat(value)) : 
+            value;
+        
+        if (field === 'type') {
+            if (value === 'time') {
+                step.recovery.value = 90;
+                step.recovery.unit = 'sec';
+            } else {
+                step.recovery.value = 200;
+                step.recovery.unit = 'm';
+            }
+            SessionManager.renderSteps();
+        }
+        
+        if (field === 'unit') {
+            if (step.recovery.type === 'time') {
+                if (value === 'min' && step.recovery.unit !== 'min') {
+                    step.recovery.value = Math.round(step.recovery.value / 60);
+                } else if (value === 'sec' && step.recovery.unit === 'min') {
+                    step.recovery.value = step.recovery.value * 60;
+                }
+            } else {
+                if (value === 'km' && step.recovery.unit === 'm') {
+                    step.recovery.value = step.recovery.value / 1000;
+                } else if (value === 'm' && step.recovery.unit === 'km') {
+                    step.recovery.value = step.recovery.value * 1000;
+                }
+            }
+            SessionManager.renderSteps();
+        }
+        
+        SessionManager.updateSummary();
+    },
+    
+    /**
+     * Supprimer une étape
+     */
+    deleteStep(stepId) {
+        SessionManager.currentSteps = SessionManager.currentSteps.filter(s => s.id !== stepId);
+        SessionManager.renderSteps();
+        SessionManager.updateSummary();
+    },
+    
+    /**
+     * Convertir en répétition
+     */
+    convertToRepeat(stepId) {
+        const step = SessionManager.currentSteps.find(s => s.id === stepId);
+        if (!step) return;
+        
+        step.isRepeat = true;
+        step.repeat = 6;
+        if (!step.recovery) {
+            step.recovery = {
+                type: 'time',
+                value: 90,
+                unit: 'sec',
+                intensity: 'none'
+            };
+        }
+        SessionManager.renderSteps();
+    },
+    
+    /**
+     * Mettre à jour le résumé
+     */
+    updateSummary() {
+        let totalMinutes = 0;
+        let totalDistance = 0;
+        
+        SessionManager.currentSteps.forEach(step => {
+            const repeat = step.isRepeat ? step.repeat : 1;
+            const paces = SessionManager.currentPaces;
+            
+            let stepDistanceKm = 0;
+            if (step.durationType === 'distance') {
+                stepDistanceKm = step.distanceUnit === 'm' ? step.distance / 1000 : step.distance;
+            }
+            
+            if (step.durationType === 'time') {
+                totalMinutes += step.duration * repeat;
+                const paceSeconds = SessionManager.getPaceValue(paces, step.pace);
+                totalDistance += (step.duration * 60 / paceSeconds) * repeat;
+            } else {
+                totalDistance += stepDistanceKm * repeat;
+                const paceSeconds = SessionManager.getPaceValue(paces, step.pace);
+                totalMinutes += (stepDistanceKm * paceSeconds / 60) * repeat;
+            }
+            
+            if (step.isRepeat && step.recovery && repeat > 1) {
+                const recupCount = repeat - 1;
+                
+                if (step.recovery.type === 'time') {
+                    const recupMinutes = step.recovery.unit === 'min' ? 
+                        step.recovery.value : step.recovery.value / 60;
+                    totalMinutes += recupMinutes * recupCount;
+                    
+                    if (step.recovery.intensity !== 'none') {
+                        const recupPace = SessionManager.getPaceValue(paces, step.recovery.intensity);
+                        totalDistance += (recupMinutes * 60 / recupPace) * recupCount;
+                    }
+                } else {
+                    const recupDistanceKm = step.recovery.unit === 'm' ? 
+                        step.recovery.value / 1000 : step.recovery.value;
+                    totalDistance += recupDistanceKm * recupCount;
+                    
+                    if (step.recovery.intensity !== 'none') {
+                        const recupPace = SessionManager.getPaceValue(paces, step.recovery.intensity);
+                        totalMinutes += (recupDistanceKm * recupPace / 60) * recupCount;
+                    } else {
+                        const ePace = SessionManager.getPaceValue(paces, 'E');
+                        totalMinutes += (recupDistanceKm * ePace / 60) * recupCount;
+                    }
+                }
+            }
+        });
+        
+        const durationEl = document.getElementById('total-duration');
+        const distanceEl = document.getElementById('total-distance');
+        
+        if (durationEl) {
+            const hours = Math.floor(totalMinutes / 60);
+            const mins = Math.round(totalMinutes % 60);
+            durationEl.textContent = hours > 0 ? `${hours}:${mins.toString().padStart(2, '0')}` : `${mins}:00`;
+        }
+        
+        if (distanceEl) {
+            distanceEl.textContent = `${totalDistance.toFixed(2)} km`;
+        }
+    },
+    
+    /**
+     * Sauvegarder la séance structurée
+     */
+    saveStructuredSession(weekIndex, dayIndex) {
+        if (!SessionManager.currentSteps || SessionManager.currentSteps.length === 0) {
+            alert('Veuillez ajouter au moins une étape à la séance');
+            return;
+        }
+        
+        const week = STATE.currentPlanData.plan[weekIndex];
+        const paces = STATE.currentPlanData.paces;
+        
+        if (!paces) {
+            console.error('⚠️ Paces non disponibles dans STATE');
+            alert('Erreur : Les allures ne sont pas disponibles');
+            return;
+        }
+        
+        let totalDistance = 0;
+        let maxIntensity = 1;
+        
+        SessionManager.currentSteps.forEach(step => {
+            const repeat = step.isRepeat ? step.repeat : 1;
+            
+            let stepDistanceKm = 0;
+            if (step.durationType === 'time') {
+                const paceSeconds = SessionManager.getPaceValue(paces, step.pace);
+                stepDistanceKm = (step.duration * 60 / paceSeconds) * repeat;
+            } else {
+                stepDistanceKm = (step.distanceUnit === 'm' ? step.distance / 1000 : step.distance) * repeat;
+            }
+            
+            totalDistance += stepDistanceKm;
+            
+            if (step.isRepeat && step.recovery && repeat > 1) {
+                const recupCount = repeat - 1;
+                if (step.recovery.type === 'distance') {
+                    const recupDistanceKm = step.recovery.unit === 'm' ? 
+                        step.recovery.value / 1000 : step.recovery.value;
+                    totalDistance += recupDistanceKm * recupCount;
+                } else if (step.recovery.intensity !== 'none') {
+                    const recupMinutes = step.recovery.unit === 'min' ? 
+                        step.recovery.value : step.recovery.value / 60;
+                    const recupPace = SessionManager.getPaceValue(paces, step.recovery.intensity);
+                    totalDistance += (recupMinutes * 60 / recupPace) * recupCount;
+                }
+            }
+            
+            const intensityMap = { E: 1, M: 2, T: 3, I: 4, R: 4, C: 3 };
+            maxIntensity = Math.max(maxIntensity, intensityMap[step.pace] || 1);
+        });
+        
+        const sessionName = SessionManager.currentSteps[0]?.type || 'Séance personnalisée';
+        
+        const structure = {};
+        SessionManager.currentSteps.forEach((step, index) => {
+            const repeat = step.isRepeat ? step.repeat : 1;
+            const paceValue = SessionManager.getPaceValue(paces, step.pace);
+            const paceStr = Formatters.secondsToPace(paceValue);
+            
+            let desc;
+            if (step.durationType === 'time') {
+                desc = repeat > 1 
+                    ? `${repeat}x ${step.duration} min à ${paceStr}`
+                    : `${step.duration} min à ${paceStr}`;
+            } else {
+                const distValue = step.distanceUnit === 'm' ? 
+                    `${step.distance}m` : `${step.distance}km`;
+                desc = repeat > 1
+                    ? `${repeat}x ${distValue} à ${paceStr}`
+                    : `${distValue} à ${paceStr}`;
+            }
+            
+            if (step.isRepeat && step.recovery) {
+                let recupDesc = '';
+                if (step.recovery.type === 'time') {
+                    recupDesc = step.recovery.unit === 'min' ?
+                        `${step.recovery.value} min` : `${step.recovery.value} sec`;
+                } else {
+                    recupDesc = step.recovery.unit === 'm' ?
+                        `${step.recovery.value}m` : `${step.recovery.value}km`;
+                }
+                
+                if (step.recovery.intensity !== 'none') {
+                    const recupPaceValue = SessionManager.getPaceValue(paces, step.recovery.intensity);
+                    const recupPaceStr = Formatters.secondsToPace(recupPaceValue);
+                    structure.recuperation = `${recupDesc} à ${recupPaceStr}`;
+                } else {
+                    structure.recuperation = `${recupDesc} trot`;
+                }
+            }
+            
+            if (index === 0) structure.echauffement = desc;
+            else if (index === SessionManager.currentSteps.length - 1) structure.retourAuCalme = desc;
+            else structure.bloc = (structure.bloc ? structure.bloc + ' + ' : '') + desc;
+        });
+        
+        const newSession = {
+            type: sessionName,
+            intensity: maxIntensity,
+            structure: structure,
+            distance: totalDistance,
+            day: dayIndex,
+            fullDate: `${CONFIG.fullDayNames[dayIndex]} ${DateUtils.format(DateUtils.addDays(week.startDate, dayIndex))}`
+        };
+        
+        week.sessions.push(newSession);
+        week.totalKm = Math.round(week.sessions.reduce((sum, s) => sum + (s.distance || 0), 0));
+        week.tss = Math.round(week.sessions.reduce((sum, s) => 
+            sum + VDOT.calculateTSS(s, paces), 0
+        ));
+        
+        document.querySelector('.session-modal-overlay').remove();
+        SessionManager.refreshPlan();
+        
+        console.log(`✅ Séance structurée ajoutée : Semaine ${weekIndex + 1}, ${CONFIG.fullDayNames[dayIndex]}`);
+    },
+    
+    /**
+     * Rafraîchir l'affichage du plan
+     */
+    refreshPlan() {
+        const openStates = new Map();
+        document.querySelectorAll('.week-details').forEach((details, index) => {
+            openStates.set(index.toString(), details.open);
+        });
+        
+        const activeTab = document.querySelector('.phase-tab.active');
+        const activePhase = activeTab ? activeTab.dataset.phase : null;
+        
+        Render.renderPlan(STATE.currentPlanData, openStates, activePhase);
+        Render.renderLoadChart(STATE.currentPlanData);
+        Interactions.setupDragDrop();
+        SessionManager.addSessionButtons();
+    },
+    
+    /**
+     * Ajouter les boutons d'ajout et suppression
+     */
+    addSessionButtons() {
+        console.log('➕ Ajout des boutons de gestion de séances');
+        
+        document.querySelectorAll('.empty-day-slot').forEach(slot => {
+            if (!slot.querySelector('.add-session-btn')) {
+                const addBtn = document.createElement('button');
+                addBtn.className = 'add-session-btn';
+                addBtn.innerHTML = '➕';
+                addBtn.title = 'Ajouter une séance';
+                slot.appendChild(addBtn);
+            }
+        });
+        
+        document.querySelectorAll('.session-card').forEach(card => {
+            if (!card.querySelector('.delete-session-btn')) {
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'delete-session-btn';
+                deleteBtn.innerHTML = '✕';
+                deleteBtn.title = 'Supprimer cette séance';
+                card.appendChild(deleteBtn);
+            }
+        });
+        
+        console.log('✅ Boutons ajoutés');
+    }
+};
+
+// Initialiser au chargement du DOM
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('📦 DOM chargé - Initialisation de SessionManager V9');
+    SessionManager.init();
+});
+
+// Export global
+if (typeof window !== 'undefined') {
+    window.SessionManager = SessionManager;
+    console.log('🌍 SessionManager V9 disponible globalement');
 }
-
-// ============================================================================
-// EXPORT & UTILISATION
-// ============================================================================
-
-export default SessionManager;
-
-// Exemple d'utilisation:
-/*
-import SessionManager from './sessionManager.js';
-
-const manager = new SessionManager();
-
-// Activer le debug
-window.DEBUG = true;
-manager.debugMode = true;
-
-// Initialiser avec les allures du diagnostic
-manager.initialize({
-  E_low: 372.89,   // 6:13/km
-  E_high: 338.65,  // 5:39/km
-  M: 301.28,       // 5:01/km
-  T: 281.82,       // 4:42/km
-  I: 260.50,       // 4:21/km
-  R: 390           // 6:30/km (estimation)
-});
-
-// Créer une séance d'endurance
-const session1 = manager.createSession('endurance', { duration: 45 });
-
-// Créer une séance de VMA
-const session2 = manager.createSession('vma', {
-  repCount: 10,
-  repDuration: 30,
-  recoveryDuration: 30
-});
-
-// Créer une sortie longue avec finish progressif
-const session3 = manager.createSession('sortie_longue', {
-  duration: 90,
-  progressive: true
-});
-
-// Obtenir les stats
-console.log(manager.getWeeklyStats(1));
-*/
