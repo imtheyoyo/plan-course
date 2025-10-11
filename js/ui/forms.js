@@ -54,7 +54,7 @@ const Forms = {
         const nextMonday = DateUtils.getNextMonday();
         DOM.startDate.value = DateUtils.toISO(nextMonday);
         
-        const defaultRaceDate = DateUtils.addDays(nextMonday, 16 * 7);
+        const defaultRaceDate = DateUtils.addDays(nextMonday, (16 * 7) - 1); // Dimanche de la semaine 16
         DOM.raceDate.value = DateUtils.toISO(defaultRaceDate);
         
         // Valeurs par défaut
