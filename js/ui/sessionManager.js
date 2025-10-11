@@ -454,7 +454,7 @@ const SessionManager = {
         });
         
         document.querySelectorAll('.session-card').forEach(card => {
-            if (!slot.querySelector('.delete-session-btn')) {
+            if (!card.querySelector('.delete-session-btn')) {
                 const deleteBtn = document.createElement('button');
                 deleteBtn.className = 'delete-session-btn';
                 deleteBtn.innerHTML = '✕';
