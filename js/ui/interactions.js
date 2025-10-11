@@ -108,9 +108,12 @@ const Interactions = {
         // Ajouter listener pour l'édition
         document.querySelectorAll('.session-card').forEach(card => {
             card.addEventListener('click', (e) => {
-                const weekIndex = parseInt(card.dataset.weekIndex);
-                const sessionIndex = parseInt(card.dataset.sessionIndex);
-                this.openEditor(weekIndex, sessionIndex);
+                // Vérifier qu'on ne double-clique pas sur le bouton de suppression
+                if (e.target.classList.contains('delete-session-btn')) {
+                    return;
+                }
+                // Utiliser le nouveau modal structuré
+                SessionManager.showEditSessionModal(card);
             });
         });
     },
