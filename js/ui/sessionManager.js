@@ -404,7 +404,7 @@ const SessionManager = {
             id: `step-${Date.now()}-${Math.random()}`,
             type: name,
             durationType: 'time',
-            duration: 20,
+            duration: 10,
             distance: 1,
             distanceUnit: 'km',
             pace: 'E',
@@ -427,8 +427,11 @@ const SessionManager = {
         }
         
         // Parser temps au format hh:mm:ss ou mm:ss ou XX min
-        const timeHHMMSSMatch = description.match(/(\d+):(\d+):(\d+)/);
-        const timeMMSSMatch = description.match(/(\d+):(\d+)(?!\d)/);
+        // IMPORTANT: Vérifier d'abord si c'est une allure (X:XX/km) pour ne pas la confondre avec un temps
+        const isPaceFormat = /\d+:\d+\/km/.test(description);
+        
+        const timeHHMMSSMatch = description.match(/(\d+):(\d+):(\d+)(?!\/)/) && !isPaceFormat;
+        const timeMMSSMatch = description.match(/(\d+):(\d+)(?!\/)(?!\d)/) && !isPaceFormat;
         const timeMinMatch = description.match(/(\d+)\s*min(?!\s*à)/i);
         
         if (timeHHMMSSMatch) {
@@ -438,18 +441,18 @@ const SessionManager = {
             const secs = parseInt(timeHHMMSSMatch[3]);
             step.durationType = 'time';
             step.duration = hours * 60 + mins + secs / 60;
-            console.log(`⏱️ Temps détecté: ${hours}:${mins}:${secs} → ${step.duration} min`);
-        } else if (timeMMSSMatch && !description.match(/\d+:\d+\/km/)) {
-            // Format mm:ss (mais pas une allure comme 4:21/km)
+            console.log(`⏱️ Temps détecté (hh:mm:ss): ${hours}:${mins}:${secs} → ${step.duration.toFixed(2)} min`);
+        } else if (timeMMSSMatch) {
+            // Format mm:ss (ex: 10:00, 45:30)
             const mins = parseInt(timeMMSSMatch[1]);
             const secs = parseInt(timeMMSSMatch[2]);
             step.durationType = 'time';
             step.duration = mins + secs / 60;
-            console.log(`⏱️ Temps détecté: ${mins}:${secs} → ${step.duration} min`);
+            console.log(`⏱️ Temps détecté (mm:ss): ${mins}:${secs} → ${step.duration.toFixed(2)} min`);
         } else if (timeMinMatch) {
             step.durationType = 'time';
             step.duration = parseInt(timeMinMatch[1]);
-            console.log(`⏱️ Temps détecté: ${step.duration} min`);
+            console.log(`⏱️ Temps détecté (min): ${step.duration} min`);
         }
         
         // Parser distance mètres
