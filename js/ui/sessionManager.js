@@ -460,7 +460,7 @@ const SessionManager = {
             }
         };
 
-         console.log(`🔍 Parsing description: "${description}"`); // ✅ AJOUTÉ : Debug
+         console.log(`🔍 Parsing description: "${description}"`);
         
         // Parser répétitions
         const repeatMatch = description.match(/(\d+)x\s*/i);
@@ -471,11 +471,19 @@ const SessionManager = {
         }
         
         // Parser temps au format hh:mm:ss ou mm:ss ou XX min
-        // IMPORTANT: Vérifier d'abord si c'est une allure (X:XX/km) pour ne pas la confondre avec un temps
-        const isPaceFormat = /\d+:\d+\/km/.test(description);
-        
-        const timeHHMMSSMatch = description.match(/(\d+):(\d+):(\d+)(?!\/)/) && !isPaceFormat;
-        const timeMMSSMatch = description.match(/(\d+):(\d+)(?!\/)(?!\d)/) && !isPaceFormat;
+        // NOUVEAU : Regex améliorés qui excluent directement les allures
+    
+        // Format hh:mm:ss (ex: 1:30:00)
+        // Lookbehind négatif (?<!\d) = pas précédé d'un chiffre
+        // Lookahead négatif (?!\S*\/km) = pas suivi de /km (même avec espaces)
+        const timeHHMMSSMatch = description.match(/(?<!\d)(\d+):(\d+):(\d+)(?!\S*\/km)/);
+    
+        // Format mm:ss (ex: 50:00, 10:30)
+        // (?<!\d) = pas précédé d'un chiffre (évite de matcher dans "1:50:00")
+        // (?!\S*\/km) = pas suivi de /km
+        const timeMMSSMatch = description.match(/(?<!\d)(\d{1,2}):(\d{2})(?!\S*\/km)/);
+    
+        // Format XX min (ex: 50 min, 10 min)
         const timeMinMatch = description.match(/(\d+)\s*min(?!\s*à)/i);
         
         if (timeHHMMSSMatch) {
