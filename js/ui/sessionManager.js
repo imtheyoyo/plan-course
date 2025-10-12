@@ -404,7 +404,7 @@ const SessionManager = {
             id: `step-${Date.now()}-${Math.random()}`,
             type: name,
             durationType: 'time',
-            // duration: 10,
+            duration: 10,
             distance: 1,
             distanceUnit: 'km',
             pace: 'E',
