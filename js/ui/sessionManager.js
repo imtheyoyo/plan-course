@@ -34,21 +34,27 @@ const SessionManager = {
     },
     
     /**
-     * Convertir hh:mm:ss en minutes
+     * Valider et formater une saisie de durée hh:mm:ss
      */
-    hhmmssToMinutes(timeStr) {
-        const parts = timeStr.split(':').map(p => parseInt(p) || 0);
+    validateTimeInput(input) {
+        // Filtrer uniquement chiffres et :
+        let cleaned = input.replace(/[^\d:]/g, '');
         
-        if (parts.length === 3) {
-            // hh:mm:ss
-            return parts[0] * 60 + parts[1] + parts[2] / 60;
-        } else if (parts.length === 2) {
-            // mm:ss
-            return parts[0] + parts[1] / 60;
-        } else {
-            // mm seulement
-            return parts[0];
+        // Limiter le nombre de :
+        const colonCount = (cleaned.match(/:/g) || []).length;
+        if (colonCount > 2) {
+            cleaned = cleaned.replace(/:([^:]*)$/, '$1');
         }
+        
+        return cleaned;
+    },
+    
+    /**
+     * Vérifier si une durée est valide (non zéro)
+     */
+    isValidDuration(timeStr) {
+        const minutes = SessionManager.hhmmssToMinutes(timeStr);
+        return minutes > 0;
     },
     
     /**
@@ -707,7 +713,7 @@ const SessionManager = {
             id: `step-${Date.now()}`,
             type: defaultType,
             durationType: 'time',
-            duration: defaultType === 'Échauffement' ? 20 : 10,
+            duration: 10, // 10 minutes = 00:10:00
             distance: 1,
             distanceUnit: 'km',
             pace: 'E',
@@ -781,11 +787,19 @@ const SessionManager = {
                         <div class="step-row">
                             <label>Temps total</label>
                             <div class="step-input-group">
-                                <input type="text" value="${SessionManager.minutesToHHMMSS(step.duration)}" 
-                                       placeholder="mm:ss ou hh:mm:ss"
-                                       onchange="SessionManager.updateStep('${step.id}', 'duration', this.value)">
+                                <input type="text" 
+                                       value="${SessionManager.minutesToHHMMSS(step.duration)}" 
+                                       placeholder="hh:mm:ss"
+                                       class="time-input"
+                                       data-step-id="${step.id}"
+                                       oninput="this.value = SessionManager.validateTimeInput(this.value)"
+                                       onblur="SessionManager.validateAndUpdateDuration('${step.id}', this.value, this)"
+                                       onchange="SessionManager.validateAndUpdateDuration('${step.id}', this.value, this)">
                                 <span>hh:mm:ss</span>
                             </div>
+                            <small class="time-hint" style="color: #6b7280; font-size: 0.75rem; display: block; margin-top: 4px;">
+                                Format: mm:ss ou hh:mm:ss (ex: 10:00 ou 1:30:00)
+                            </small>
                         </div>
                     ` : `
                         <div class="step-row">
@@ -930,6 +944,55 @@ const SessionManager = {
                 }
             });
         });
+    },
+    
+    /**
+     * Valider et mettre à jour la durée
+     */
+    validateAndUpdateDuration(stepId, value, inputElement) {
+        // Valider que la durée n'est pas zéro
+        if (!SessionManager.isValidDuration(value)) {
+            // Afficher erreur
+            inputElement.style.borderColor = '#ef4444';
+            inputElement.style.backgroundColor = '#fee2e2';
+            
+            // Afficher message d'erreur
+            let errorMsg = inputElement.parentElement.parentElement.querySelector('.error-msg');
+            if (!errorMsg) {
+                errorMsg = document.createElement('small');
+                errorMsg.className = 'error-msg';
+                errorMsg.style.color = '#ef4444';
+                errorMsg.style.fontSize = '0.75rem';
+                errorMsg.style.display = 'block';
+                errorMsg.style.marginTop = '4px';
+                inputElement.parentElement.parentElement.appendChild(errorMsg);
+            }
+            errorMsg.textContent = '❌ La durée doit être supérieure à zéro';
+            
+            // Restaurer la valeur précédente après 2 secondes
+            setTimeout(() => {
+                const step = SessionManager.currentSteps.find(s => s.id === stepId);
+                if (step) {
+                    inputElement.value = SessionManager.minutesToHHMMSS(step.duration);
+                    inputElement.style.borderColor = '';
+                    inputElement.style.backgroundColor = '';
+                    if (errorMsg) errorMsg.remove();
+                }
+            }, 2000);
+            
+            return;
+        }
+        
+        // Supprimer le message d'erreur si présent
+        const errorMsg = inputElement.parentElement.parentElement.querySelector('.error-msg');
+        if (errorMsg) errorMsg.remove();
+        
+        // Réinitialiser le style
+        inputElement.style.borderColor = '';
+        inputElement.style.backgroundColor = '';
+        
+        // Mettre à jour l'étape
+        SessionManager.updateStep(stepId, 'duration', value);
     },
     
     /**
@@ -1091,8 +1154,14 @@ const SessionManager = {
         
         if (durationEl) {
             const hours = Math.floor(totalMinutes / 60);
-            const mins = Math.round(totalMinutes % 60);
-            durationEl.textContent = hours > 0 ? `${hours}:${mins.toString().padStart(2, '0')}` : `${mins}:00`;
+            const mins = Math.floor(totalMinutes % 60);
+            const secs = Math.round((totalMinutes % 1) * 60);
+            
+            if (hours > 0) {
+                durationEl.textContent = `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            } else {
+                durationEl.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+            }
         }
         
         if (distanceEl) {
