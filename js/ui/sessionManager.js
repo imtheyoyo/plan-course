@@ -41,6 +41,31 @@ const SessionManager = {
             return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
     },
+
+    /**
+     * ✅ AJOUTER CETTE FONCTION ICI (APRÈS minutesToHHMMSS)
+     * Convertir hh:mm:ss en minutes
+     */
+    hhmmssToMinutes(timeStr) {
+        if (!timeStr || timeStr.trim() === '') return 0;
+        
+        const parts = timeStr.split(':').map(p => parseInt(p) || 0);
+        
+        if (parts.length === 3) {
+            // Format hh:mm:ss
+            const [hours, mins, secs] = parts;
+            return hours * 60 + mins + secs / 60;
+        } else if (parts.length === 2) {
+            // Format mm:ss
+            const [mins, secs] = parts;
+            return mins + secs / 60;
+        } else if (parts.length === 1) {
+            // Format mm
+            return parts[0];
+        }
+        
+        return 0;
+    },
     
     /**
      * Valider et formater une saisie de durée hh:mm:ss
