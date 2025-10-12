@@ -264,7 +264,7 @@ const SessionManager = {
     
     /**
      * Charger les étapes d'une séance existante
-     * V9.2: Support format liste "400m + 600m + 800m à 4:20/km"
+     * V9.4: Support format liste "400m + 600m + 800m à 4:20/km"
      */
     loadSessionSteps(session) {
         console.log('📥 Chargement de la séance:', session);
@@ -275,8 +275,10 @@ const SessionManager = {
         if (session.structure?.echauffement) {
             console.log('🔥 Parsing échauffement:', session.structure.echauffement);
             const step = SessionManager.parseStepFromDescription('Échauffement', session.structure.echauffement);
+            // S'assurer que le titre reste Échauffement
+            step.type = 'Échauffement';
             steps.push(step);
-            console.log('  ✅ Étape échauffement ajoutée');
+            console.log('  ✅ Étape échauffement ajoutée:', step);
         }
         
         // Bloc principal
@@ -293,18 +295,21 @@ const SessionManager = {
                 console.log(`📋 ${blocSteps.length} étape(s) (format répétition)`);
                 
                 blocSteps.forEach((blocDesc, index) => {
-                    const stepName = blocSteps.length > 1 ? 
-                        `${session.type || 'Bloc'} ${index + 1}` : 
-                        session.type || 'Bloc';
+                    // Toujours utiliser "Course à pied" pour les blocs
+                    const stepName = 'Course à pied';
                     
                     const isRepeat = /\d+x/i.test(blocDesc);
                     const step = SessionManager.parseStepFromDescription(stepName, blocDesc, isRepeat);
+                    
+                    // Forcer le titre
+                    step.type = 'Course à pied';
                     
                     if (isRepeat && session.structure?.recuperation) {
                         step.recovery = SessionManager.parseRecoveryFromDescription(session.structure.recuperation);
                     }
                     
                     steps.push(step);
+                    console.log(`  ✅ Étape "${step.type}" ajoutée:`, step);
                 });
             } else {
                 // Format liste: "400m + 600m + 800m + 1000m à 4:20/km"
@@ -326,10 +331,14 @@ const SessionManager = {
                 
                 // Créer une étape par distance
                 distances.forEach((dist, index) => {
-                    const stepName = `${session.type || 'Bloc'} ${index + 1}`;
+                    // Toujours "Course à pied" pour les blocs
+                    const stepName = 'Course à pied';
                     const fullDesc = globalPace ? `${dist} à ${globalPace}` : dist;
                     
                     const step = SessionManager.parseStepFromDescription(stepName, fullDesc, false);
+                    
+                    // Forcer le titre
+                    step.type = 'Course à pied';
                     
                     // Ajouter récupération sauf pour la dernière
                     if (session.structure?.recuperation && index < distances.length - 1) {
@@ -337,6 +346,7 @@ const SessionManager = {
                     }
                     
                     steps.push(step);
+                    console.log(`  ✅ Étape "${step.type}" ajoutée:`, step);
                 });
                 
                 console.log(`  ✅ ${distances.length} étapes ajoutées`);
@@ -347,8 +357,10 @@ const SessionManager = {
         if (session.structure?.retourAuCalme) {
             console.log('🧘 Parsing retour au calme:', session.structure.retourAuCalme);
             const step = SessionManager.parseStepFromDescription('Retour au calme', session.structure.retourAuCalme);
+            // S'assurer que le titre reste Retour au calme
+            step.type = 'Retour au calme';
             steps.push(step);
-            console.log('  ✅ Étape retour au calme ajoutée');
+            console.log('  ✅ Étape retour au calme ajoutée:', step);
         }
         
         // Étape par défaut si aucune trouvée
@@ -356,9 +368,9 @@ const SessionManager = {
             console.warn('⚠️ Aucune étape parsée, création étape par défaut');
             steps.push({
                 id: `step-${Date.now()}`,
-                type: session.type || 'Séance',
+                type: 'Course à pied',
                 durationType: 'distance',
-                duration: 30,
+                duration: 10,
                 distance: session.distance || 10,
                 distanceUnit: 'km',
                 pace: 'E',
@@ -374,6 +386,11 @@ const SessionManager = {
         }
         
         console.log(`✅ ${steps.length} étape(s) chargée(s) au total`);
+        console.log('📊 Résumé des étapes:');
+        steps.forEach((s, i) => {
+            console.log(`  ${i + 1}. ${s.type} - ${s.durationType === 'time' ? s.duration + ' min' : s.distance + s.distanceUnit}`);
+        });
+        
         SessionManager.currentSteps = steps;
         SessionManager.renderSteps();
         SessionManager.updateSummary();
