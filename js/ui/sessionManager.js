@@ -553,6 +553,14 @@ const SessionManager = {
             alert('Veuillez ajouter au moins une étape à la séance');
             return;
         }
+
+        for (let i = 0; i < SessionManager.currentSteps.length; i++) {
+            const step = SessionManager.currentSteps[i];
+            if (step.durationType === 'time' && (!step.duration || step.duration <= 0)) {
+                alert(`❌ Erreur à l'étape "${step.type}":\nLa durée doit être supérieure à zéro.\n\nVeuillez saisir une durée valide (ex: 10:00 pour 10 minutes).`);
+                return;
+            }
+        }
         
         const week = STATE.currentPlanData.plan[weekIndex];
         const paces = STATE.currentPlanData.paces;
@@ -1227,6 +1235,15 @@ const SessionManager = {
         if (!SessionManager.currentSteps || SessionManager.currentSteps.length === 0) {
             alert('Veuillez ajouter au moins une étape à la séance');
             return;
+        }
+
+        // ✅ NOUVELLE VALIDATION : Vérifier que toutes les durées temps sont > 0
+        for (let i = 0; i < SessionManager.currentSteps.length; i++) {
+            const step = SessionManager.currentSteps[i];
+            if (step.durationType === 'time' && (!step.duration || step.duration <= 0)) {
+                alert(`❌ Erreur à l'étape "${step.type}":\nLa durée doit être supérieure à zéro.\n\nVeuillez saisir une durée valide (ex: 10:00 pour 10 minutes).`);
+                return;
+            }
         }
         
         const week = STATE.currentPlanData.plan[weekIndex];
