@@ -1,15 +1,13 @@
 /**
  * ================================================
  * SessionManager.js
- * Version: 9.1.0 - v26
- * Date: 2025-01-12
- * Heure: 07h50
+ * Version: 9.2.0
+ * Date: 2025-01-11
+ * Heure: 16:00 UTC
  * ================================================
- * Gestion complète des séances avec support multi-étapes
- * - Correction bug allures N/A (getPaceValue)
- * - Drag & Drop des étapes
- * - Support blocs multiples (10x 400m + 5x 1000m)
- * - Parsing intelligent des répétitions
+ * IMPORTANT: Support du format liste pyramide
+ * - Format répétitions: "10x 400m + 5x 1000m"
+ * - Format liste: "400m + 600m + 800m à 4:20/km" ← NOUVEAU
  * ================================================
  */
 
