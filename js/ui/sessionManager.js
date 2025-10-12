@@ -1,9 +1,9 @@
 /**
  * ================================================
  * SessionManager.js
- * Version: 9.1.0
- * Date: 2025-01-11
- * Heure: 14:30 UTC
+ * Version: 9.1.0 - v26
+ * Date: 2025-01-12
+ * Heure: 07h50
  * ================================================
  * Gestion complète des séances avec support multi-étapes
  * - Correction bug allures N/A (getPaceValue)
