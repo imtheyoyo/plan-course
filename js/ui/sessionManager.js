@@ -1,9 +1,9 @@
 /**
  * ================================================
  * SessionManager.js
- * Version: 9.2.0
+ * Version: 9.2.0 v2
  * Date: 2025-01-11
- * Heure: 16:00 UTC
+ * Heure: 16:30 UTC
  * ================================================
  * IMPORTANT: Support du format liste pyramide
  * - Format répétitions: "10x 400m + 5x 1000m"
@@ -30,14 +30,13 @@ const SessionManager = {
      * IMPORTANT : Résout le bug N/A en mappant E -> E_low
      */
     getPaceValue(paces, paceKey) {
-        // Mapping des clés courtes vers les clés du STATE
         const paceMap = {
-            'E': 'E_low',    // Endurance facile
-            'M': 'M',        // Marathon
-            'T': 'T',        // Tempo/Seuil
-            'I': 'I',        // Intervalle
-            'R': 'R',        // Répétition
-            'C': 'C'         // Course
+            'E': 'E_low',
+            'M': 'M',
+            'T': 'T',
+            'I': 'I',
+            'R': 'R',
+            'C': 'C'
         };
         
         const actualKey = paceMap[paceKey] || paceKey;
@@ -45,12 +44,7 @@ const SessionManager = {
         
         if (!paceValue) {
             console.warn(`⚠️ Allure non trouvée pour: ${paceKey} (cherché: ${actualKey})`);
-            console.log('=== DIAGNOSTIC ===');
-            console.log('1. Clé demandée:', paceKey);
-            console.log('2. Clé mappée:', actualKey);
-            console.log('3. Clés disponibles:', Object.keys(paces));
-            console.log('4. Valeur trouvée:', paceValue);
-            return paces.E_low || 360; // Fallback sur endurance ou 6:00/km
+            return paces.E_low || 360;
         }
         
         return paceValue;
@@ -169,9 +163,7 @@ const SessionManager = {
                 </div>
                 
                 <div class="session-modal-body-structured">
-                    <div class="session-steps-container" id="session-steps">
-                        <!-- Les étapes seront ajoutées ici -->
-                    </div>
+                    <div class="session-steps-container" id="session-steps"></div>
                     
                     <div class="session-actions">
                         <button class="btn-add-step" onclick="SessionManager.addStepToSession()">
@@ -229,90 +221,70 @@ const SessionManager = {
             console.log('🔥 Parsing échauffement:', session.structure.echauffement);
             const step = SessionManager.parseStepFromDescription('Échauffement', session.structure.echauffement);
             steps.push(step);
-            console.log('  ✅ Étape échauffement ajoutée:', step);
+            console.log('  ✅ Étape échauffement ajoutée');
         }
         
-        // Bloc principal - peut contenir plusieurs étapes séparées par " + "
+        // Bloc principal
         if (session.structure?.bloc) {
             console.log('💪 Parsing bloc principal:', session.structure.bloc);
             
-            // Détecter si c'est un format "liste" (400m + 600m + 800m à XXX)
-            // ou un format "répétitions" (10x 400m à XXX + 5x 1000m à XXX)
+            // Détecter le format: répétitions (10x 400m) ou liste (400m + 600m + 800m)
             const hasRepetitionFormat = /\d+x\s*\d+/i.test(session.structure.bloc);
             console.log('🔍 Format détecté:', hasRepetitionFormat ? 'répétitions' : 'liste');
             
             if (hasRepetitionFormat) {
-                // Format standard avec répétitions : "10x 400m + 5x 1000m"
+                // Format standard: "10x 400m + 5x 1000m"
                 const blocSteps = session.structure.bloc.split(/\s*\+\s*/);
-                console.log(`📋 ${blocSteps.length} étape(s) détectée(s) dans le bloc (format répétition):`, blocSteps);
+                console.log(`📋 ${blocSteps.length} étape(s) (format répétition)`);
                 
                 blocSteps.forEach((blocDesc, index) => {
-                    console.log(`  ├─ Étape ${index + 1}/${blocSteps.length}: "${blocDesc}"`);
-                    const isRepeat = blocDesc.includes('x') || blocDesc.includes('X');
-                    console.log(`     └─ isRepeat: ${isRepeat}`);
+                    const stepName = blocSteps.length > 1 ? 
+                        `${session.type || 'Bloc'} ${index + 1}` : 
+                        session.type || 'Bloc';
                     
-                    let stepName = session.type || `Bloc ${index + 1}`;
-                    if (blocSteps.length > 1) {
-                        stepName = `${session.type || 'Bloc'} ${index + 1}`;
+                    const isRepeat = /\d+x/i.test(blocDesc);
+                    const step = SessionManager.parseStepFromDescription(stepName, blocDesc, isRepeat);
+                    
+                    if (isRepeat && session.structure?.recuperation) {
+                        step.recovery = SessionManager.parseRecoveryFromDescription(session.structure.recuperation);
                     }
                     
-                    if (isRepeat) {
-                        const step = SessionManager.parseStepFromDescription(stepName, blocDesc, true);
-                        
-                        if (session.structure?.recuperation) {
-                            console.log('     └─ Ajout récupération à l\'étape');
-                            step.recovery = SessionManager.parseRecoveryFromDescription(session.structure.recuperation);
-                        }
-                        
-                        steps.push(step);
-                        console.log('     ✅ Étape répétitive ajoutée:', step);
-                    } else {
-                        const step = SessionManager.parseStepFromDescription(stepName, blocDesc);
-                        steps.push(step);
-                        console.log('     ✅ Étape simple ajoutée:', step);
-                    }
+                    steps.push(step);
                 });
             } else {
-                // Format liste : "400m + 600m + 800m + 1000m à 4:20/km"
-                console.log('📋 Format liste détecté (sans répétitions explicites)');
+                // Format liste: "400m + 600m + 800m + 1000m à 4:20/km"
+                console.log('📋 Format liste détecté');
                 
-                // Extraire l'allure globale (à la fin)
+                // Extraire l'allure globale
                 const globalPaceMatch = session.structure.bloc.match(/à\s+(\d+:\d+\/km)\s*$/);
                 const globalPace = globalPaceMatch ? globalPaceMatch[1] : null;
                 console.log(`  └─ Allure globale: ${globalPace || 'non trouvée'}`);
                 
-                // Extraire les distances (tout avant "à")
+                // Extraire les distances
                 let distancesPart = session.structure.bloc;
                 if (globalPace) {
                     distancesPart = session.structure.bloc.replace(/\s*à\s+\d+:\d+\/km\s*$/, '');
                 }
                 
-                // Séparer les distances
                 const distances = distancesPart.split(/\s*\+\s*/).map(d => d.trim());
-                console.log(`  └─ ${distances.length} distance(s) trouvée(s):`, distances);
+                console.log(`  └─ ${distances.length} distance(s):`, distances);
                 
                 // Créer une étape par distance
                 distances.forEach((dist, index) => {
                     const stepName = `${session.type || 'Bloc'} ${index + 1}`;
-                    
-                    // Reconstruire la description avec l'allure
                     const fullDesc = globalPace ? `${dist} à ${globalPace}` : dist;
-                    console.log(`  ├─ Étape ${index + 1}/${distances.length}: "${fullDesc}"`);
                     
                     const step = SessionManager.parseStepFromDescription(stepName, fullDesc, false);
                     
-                    // Si une récupération existe, l'ajouter à toutes les étapes sauf la dernière
+                    // Ajouter récupération sauf pour la dernière
                     if (session.structure?.recuperation && index < distances.length - 1) {
-                        console.log('     └─ Ajout récupération à l\'étape');
                         step.recovery = SessionManager.parseRecoveryFromDescription(session.structure.recuperation);
-                        step.isRepeat = false; // Pas de répétition, mais on garde la récup pour l'UI
                     }
                     
                     steps.push(step);
-                    console.log('     ✅ Étape ajoutée:', step);
                 });
                 
-                console.log(`  ✅ Total étapes bloc ajoutées: ${distances.length}`);
+                console.log(`  ✅ ${distances.length} étapes ajoutées`);
             }
         }
         
@@ -321,12 +293,12 @@ const SessionManager = {
             console.log('🧘 Parsing retour au calme:', session.structure.retourAuCalme);
             const step = SessionManager.parseStepFromDescription('Retour au calme', session.structure.retourAuCalme);
             steps.push(step);
-            console.log('  ✅ Étape retour au calme ajoutée:', step);
+            console.log('  ✅ Étape retour au calme ajoutée');
         }
         
-        // Si aucune étape n'a pu être parsée, créer une étape par défaut
+        // Étape par défaut si aucune trouvée
         if (steps.length === 0) {
-            console.warn('⚠️ Aucune étape parsée, création d\'une étape par défaut');
+            console.warn('⚠️ Aucune étape parsée, création étape par défaut');
             steps.push({
                 id: `step-${Date.now()}`,
                 type: session.type || 'Séance',
@@ -347,7 +319,6 @@ const SessionManager = {
         }
         
         console.log(`✅ ${steps.length} étape(s) chargée(s) au total`);
-        console.log('📊 Détail des étapes:', steps);
         SessionManager.currentSteps = steps;
         SessionManager.renderSteps();
         SessionManager.updateSummary();
@@ -375,65 +346,51 @@ const SessionManager = {
             }
         };
         
-        // Parser les répétitions (ex: "10x 400m", "8x 30 sec")
+        // Parser répétitions
         const repeatMatch = description.match(/(\d+)x\s*/i);
         if (repeatMatch) {
             step.repeat = parseInt(repeatMatch[1]);
             step.isRepeat = true;
-            console.log(`🔁 Répétition détectée: ${step.repeat}x`);
+            console.log(`🔁 Répétition: ${step.repeat}x`);
         }
         
-        // Parser le temps (ex: "20 min", "35min", "30 sec")
+        // Parser temps
         const timeMinMatch = description.match(/(\d+)\s*min(?!\s*à)/i);
         if (timeMinMatch) {
             step.durationType = 'time';
             step.duration = parseInt(timeMinMatch[1]);
-            console.log(`⏱️ Temps détecté: ${step.duration} min`);
+            console.log(`⏱️ Temps: ${step.duration} min`);
         }
         
-        // Parser les secondes (ex: "30 sec", "45sec") - pour les intervalles courts
-        const timeSecMatch = description.match(/(\d+)\s*sec/i);
-        if (timeSecMatch && !timeMinMatch) {
-            step.durationType = 'time';
-            // Convertir en minutes pour uniformiser
-            step.duration = Math.round(parseInt(timeSecMatch[1]) / 60 * 10) / 10; // Arrondi à 0.1 près
-            if (step.duration < 1) step.duration = 1; // Minimum 1 minute pour l'UI
-            console.log(`⏱️ Secondes détectées: ${timeSecMatch[1]}s → ${step.duration} min`);
-        }
-        
-        // Parser la distance en mètres (ex: "400m", "1000m")
+        // Parser distance mètres
         const distanceMetersMatch = description.match(/(?<!\d)(\d+(?:\.\d+)?)\s*m(?!\s*min)(?=\s|$|à)/i);
-        if (distanceMetersMatch && !timeMinMatch && !timeSecMatch) {
+        if (distanceMetersMatch && !timeMinMatch) {
             step.durationType = 'distance';
             step.distance = parseFloat(distanceMetersMatch[1]);
             step.distanceUnit = 'm';
-            console.log(`📏 Distance détectée: ${step.distance}m`);
+            console.log(`📏 Distance: ${step.distance}m`);
         }
         
-        // Parser la distance en km (ex: "5km", "2.5 km")
+        // Parser distance km
         const distanceKmMatch = description.match(/(\d+(?:\.\d+)?)\s*km(?=\s|$|à)/i);
-        if (distanceKmMatch && !timeMinMatch && !timeSecMatch && !distanceMetersMatch) {
+        if (distanceKmMatch && !timeMinMatch && !distanceMetersMatch) {
             step.durationType = 'distance';
             step.distance = parseFloat(distanceKmMatch[1]);
             step.distanceUnit = 'km';
-            console.log(`📏 Distance détectée: ${step.distance}km`);
+            console.log(`📏 Distance: ${step.distance}km`);
         }
         
-        // Parser l'allure
+        // Parser allure
         const paces = SessionManager.currentPaces;
-        if (!paces) {
-            step.pace = 'E';
-            return step;
+        if (paces) {
+            if (paces.R && description.includes(Formatters.secondsToPace(paces.R))) step.pace = 'R';
+            else if (paces.I && description.includes(Formatters.secondsToPace(paces.I))) step.pace = 'I';
+            else if (paces.T && description.includes(Formatters.secondsToPace(paces.T))) step.pace = 'T';
+            else if (paces.M && description.includes(Formatters.secondsToPace(paces.M))) step.pace = 'M';
+            else if (paces.C && description.includes(Formatters.secondsToPace(paces.C))) step.pace = 'C';
+            else if (paces.E_high && description.includes(Formatters.secondsToPace(paces.E_high))) step.pace = 'E';
+            else if (paces.E_low && description.includes(Formatters.secondsToPace(paces.E_low))) step.pace = 'E';
         }
-        
-        if (paces.R && description.includes(Formatters.secondsToPace(paces.R))) step.pace = 'R';
-        else if (paces.I && description.includes(Formatters.secondsToPace(paces.I))) step.pace = 'I';
-        else if (paces.T && description.includes(Formatters.secondsToPace(paces.T))) step.pace = 'T';
-        else if (paces.M && description.includes(Formatters.secondsToPace(paces.M))) step.pace = 'M';
-        else if (paces.C && description.includes(Formatters.secondsToPace(paces.C))) step.pace = 'C';
-        else if (paces.E_high && description.includes(Formatters.secondsToPace(paces.E_high))) step.pace = 'E';
-        else if (paces.E_low && description.includes(Formatters.secondsToPace(paces.E_low))) step.pace = 'E';
-        else step.pace = 'E';
         
         return step;
     },
@@ -478,21 +435,18 @@ const SessionManager = {
         }
         
         const paces = SessionManager.currentPaces;
-        if (!paces) {
-            recovery.intensity = 'none';
-            return recovery;
-        }
-        
-        if (paces.E_low && description.includes(Formatters.secondsToPace(paces.E_low))) {
-            recovery.intensity = 'E';
-        } else if (paces.E_high && description.includes(Formatters.secondsToPace(paces.E_high))) {
-            recovery.intensity = 'E';
-        } else if (paces.M && description.includes(Formatters.secondsToPace(paces.M))) {
-            recovery.intensity = 'M';
-        } else if (paces.T && description.includes(Formatters.secondsToPace(paces.T))) {
-            recovery.intensity = 'T';
-        } else if (description.includes('trot')) {
-            recovery.intensity = 'none';
+        if (paces) {
+            if (description.includes('trot')) {
+                recovery.intensity = 'none';
+            } else if (paces.E_low && description.includes(Formatters.secondsToPace(paces.E_low))) {
+                recovery.intensity = 'E';
+            } else if (paces.E_high && description.includes(Formatters.secondsToPace(paces.E_high))) {
+                recovery.intensity = 'E';
+            } else if (paces.M && description.includes(Formatters.secondsToPace(paces.M))) {
+                recovery.intensity = 'M';
+            } else if (paces.T && description.includes(Formatters.secondsToPace(paces.T))) {
+                recovery.intensity = 'T';
+            }
         }
         
         return recovery;
@@ -552,16 +506,12 @@ const SessionManager = {
         
         const sessionName = SessionManager.currentSteps[0]?.type || 'Séance personnalisée';
         
-        // Créer la structure avec gestion intelligente des étapes
+        // Créer la structure
         const structure = {};
         const blocSteps = [];
         let hasRecovery = false;
         
-        console.log('💾 Début mise à jour - Nombre d\'étapes:', SessionManager.currentSteps.length);
-        
         SessionManager.currentSteps.forEach((step, index) => {
-            console.log(`  📋 Traitement étape ${index + 1}: "${step.type}"`);
-            
             const repeat = step.isRepeat ? step.repeat : 1;
             const paceValue = SessionManager.getPaceValue(paces, step.pace);
             const paceStr = Formatters.secondsToPace(paceValue);
@@ -578,8 +528,6 @@ const SessionManager = {
                     ? `${repeat}x ${distValue} à ${paceStr}`
                     : `${distValue} à ${paceStr}`;
             }
-            
-            console.log(`     └─ Description générée: "${desc}"`);
             
             if (step.isRepeat && step.recovery && !hasRecovery) {
                 let recupDesc = '';
@@ -599,33 +547,24 @@ const SessionManager = {
                     structure.recuperation = `${recupDesc} trot`;
                 }
                 hasRecovery = true;
-                console.log(`     └─ Récupération: "${structure.recuperation}"`);
             }
             
             const typeLower = step.type.toLowerCase();
             const isWarmup = typeLower.includes('échauffement') || typeLower.includes('warmup') || typeLower.includes('chauffe');
             const isCooldown = typeLower.includes('retour') || typeLower.includes('cool') || typeLower.includes('calme');
             
-            console.log(`     └─ isWarmup: ${isWarmup}, isCooldown: ${isCooldown}`);
-            
             if (index === 0 && isWarmup) {
                 structure.echauffement = desc;
-                console.log(`     └─ ✅ Classé comme échauffement`);
             } else if (index === SessionManager.currentSteps.length - 1 && isCooldown) {
                 structure.retourAuCalme = desc;
-                console.log(`     └─ ✅ Classé comme retour au calme`);
             } else {
                 blocSteps.push(desc);
-                console.log(`     └─ ✅ Ajouté au bloc (position ${blocSteps.length})`);
             }
         });
         
         if (blocSteps.length > 0) {
             structure.bloc = blocSteps.join(' + ');
-            console.log(`💾 Bloc final (${blocSteps.length} étapes): "${structure.bloc}"`);
         }
-        
-        console.log('💾 Structure finale:', JSON.stringify(structure, null, 2));
         
         week.sessions[sessionIndex] = {
             type: sessionName,
@@ -644,11 +583,11 @@ const SessionManager = {
         document.querySelector('.session-modal-overlay').remove();
         SessionManager.refreshPlan();
         
-        console.log(`✅ Séance modifiée : Semaine ${weekIndex + 1}, ${CONFIG.fullDayNames[dayIndex]}`);
-},
+        console.log(`✅ Séance modifiée : Semaine ${weekIndex + 1}`);
+    },
     
     /**
-     * Créer le HTML du modal d'ajout
+     * Créer le modal d'ajout
      */
     createAddSessionModal(weekIndex, dayIndex, week, paces) {
         const modal = document.createElement('div');
@@ -662,9 +601,7 @@ const SessionManager = {
                 </div>
                 
                 <div class="session-modal-body-structured">
-                    <div class="session-steps-container" id="session-steps">
-                        <!-- Les étapes seront ajoutées ici -->
-                    </div>
+                    <div class="session-steps-container" id="session-steps"></div>
                     
                     <div class="session-actions">
                         <button class="btn-add-step" onclick="SessionManager.addStepToSession()">
@@ -709,12 +646,11 @@ const SessionManager = {
     },
     
     /**
-     * Ajouter une étape à la séance
+     * Ajouter une étape
      */
     addStepToSession(defaultType = 'Course à pied') {
-        const stepId = `step-${Date.now()}`;
         const step = {
-            id: stepId,
+            id: `step-${Date.now()}`,
             type: defaultType,
             durationType: 'time',
             duration: defaultType === 'Échauffement' ? 20 : 10,
@@ -844,7 +780,7 @@ const SessionManager = {
                                 <div class="step-row">
                                     <label>Durée récup</label>
                                     <div class="step-input-group">
-                                        <input type="number" value="${step.recovery.unit === 'min' ? step.recovery.value : step.recovery.value}" 
+                                        <input type="number" value="${step.recovery.value}" 
                                                min="1" max="600"
                                                onchange="SessionManager.updateRecovery('${step.id}', 'value', this.value)">
                                         <select class="step-unit-select"
@@ -892,12 +828,11 @@ const SessionManager = {
             </div>
         `).join('');
         
-        // Activer le drag & drop sur les étapes
         SessionManager.setupStepsDragDrop();
     },
     
     /**
-     * Configurer le drag & drop des étapes
+     * Configurer le drag & drop
      */
     setupStepsDragDrop() {
         const steps = document.querySelectorAll('.session-step');
@@ -910,24 +845,21 @@ const SessionManager = {
                 draggedIndex = index;
                 step.style.opacity = '0.5';
                 e.dataTransfer.effectAllowed = 'move';
-                e.dataTransfer.setData('text/html', step.innerHTML);
             });
             
-            step.addEventListener('dragend', (e) => {
+            step.addEventListener('dragend', () => {
                 step.style.opacity = '1';
                 steps.forEach(s => s.classList.remove('drag-over'));
             });
             
             step.addEventListener('dragover', (e) => {
                 e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                
                 if (draggedElement !== step) {
                     step.classList.add('drag-over');
                 }
             });
             
-            step.addEventListener('dragleave', (e) => {
+            step.addEventListener('dragleave', () => {
                 step.classList.remove('drag-over');
             });
             
@@ -936,15 +868,10 @@ const SessionManager = {
                 step.classList.remove('drag-over');
                 
                 if (draggedElement !== step) {
-                    const dropIndex = index;
-                    
                     const [movedStep] = SessionManager.currentSteps.splice(draggedIndex, 1);
-                    SessionManager.currentSteps.splice(dropIndex, 0, movedStep);
-                    
+                    SessionManager.currentSteps.splice(index, 0, movedStep);
                     SessionManager.renderSteps();
                     SessionManager.updateSummary();
-                    
-                    console.log(`✅ Étape déplacée de ${draggedIndex} vers ${dropIndex}`);
                 }
             });
         });
@@ -972,7 +899,7 @@ const SessionManager = {
     },
     
     /**
-     * Mettre à jour la récupération d'une étape
+     * Mettre à jour la récupération
      */
     updateRecovery(stepId, field, value) {
         const step = SessionManager.currentSteps.find(s => s.id === stepId);
@@ -1111,7 +1038,7 @@ const SessionManager = {
     },
     
     /**
-     * Sauvegarder la séance structurée
+     * Sauvegarder la séance
      */
     saveStructuredSession(weekIndex, dayIndex) {
         if (!SessionManager.currentSteps || SessionManager.currentSteps.length === 0) {
@@ -1123,7 +1050,7 @@ const SessionManager = {
         const paces = STATE.currentPlanData.paces;
         
         if (!paces) {
-            console.error('⚠️ Paces non disponibles dans STATE');
+            console.error('⚠️ Paces non disponibles');
             alert('Erreur : Les allures ne sont pas disponibles');
             return;
         }
@@ -1168,11 +1095,7 @@ const SessionManager = {
         const blocSteps = [];
         let hasRecovery = false;
         
-        console.log('💾 Début sauvegarde - Nombre d\'étapes:', SessionManager.currentSteps.length);
-        
         SessionManager.currentSteps.forEach((step, index) => {
-            console.log(`  📋 Traitement étape ${index + 1}: "${step.type}"`);
-            
             const repeat = step.isRepeat ? step.repeat : 1;
             const paceValue = SessionManager.getPaceValue(paces, step.pace);
             const paceStr = Formatters.secondsToPace(paceValue);
@@ -1189,8 +1112,6 @@ const SessionManager = {
                     ? `${repeat}x ${distValue} à ${paceStr}`
                     : `${distValue} à ${paceStr}`;
             }
-            
-            console.log(`     └─ Description générée: "${desc}"`);
             
             if (step.isRepeat && step.recovery && !hasRecovery) {
                 let recupDesc = '';
@@ -1210,33 +1131,24 @@ const SessionManager = {
                     structure.recuperation = `${recupDesc} trot`;
                 }
                 hasRecovery = true;
-                console.log(`     └─ Récupération: "${structure.recuperation}"`);
             }
             
             const typeLower = step.type.toLowerCase();
             const isWarmup = typeLower.includes('échauffement') || typeLower.includes('warmup') || typeLower.includes('chauffe');
             const isCooldown = typeLower.includes('retour') || typeLower.includes('cool') || typeLower.includes('calme');
             
-            console.log(`     └─ isWarmup: ${isWarmup}, isCooldown: ${isCooldown}`);
-            
             if (index === 0 && isWarmup) {
                 structure.echauffement = desc;
-                console.log(`     └─ ✅ Classé comme échauffement`);
             } else if (index === SessionManager.currentSteps.length - 1 && isCooldown) {
                 structure.retourAuCalme = desc;
-                console.log(`     └─ ✅ Classé comme retour au calme`);
             } else {
                 blocSteps.push(desc);
-                console.log(`     └─ ✅ Ajouté au bloc (position ${blocSteps.length})`);
             }
         });
         
         if (blocSteps.length > 0) {
             structure.bloc = blocSteps.join(' + ');
-            console.log(`💾 Bloc final (${blocSteps.length} étapes): "${structure.bloc}"`);
         }
-        
-        console.log('💾 Structure finale:', JSON.stringify(structure, null, 2));
         
         const newSession = {
             type: sessionName,
@@ -1256,11 +1168,11 @@ const SessionManager = {
         document.querySelector('.session-modal-overlay').remove();
         SessionManager.refreshPlan();
         
-        console.log(`✅ Séance structurée ajoutée : Semaine ${weekIndex + 1}, ${CONFIG.fullDayNames[dayIndex]}`);
+        console.log(`✅ Séance ajoutée : Semaine ${weekIndex + 1}`);
     },
     
     /**
-     * Rafraîchir l'affichage du plan
+     * Rafraîchir le plan
      */
     refreshPlan() {
         const openStates = new Map();
@@ -1278,11 +1190,9 @@ const SessionManager = {
     },
     
     /**
-     * Ajouter les boutons d'ajout et suppression
+     * Ajouter les boutons
      */
     addSessionButtons() {
-        console.log('➕ Ajout des boutons de gestion de séances');
-        
         document.querySelectorAll('.empty-day-slot').forEach(slot => {
             if (!slot.querySelector('.add-session-btn')) {
                 const addBtn = document.createElement('button');
@@ -1302,5 +1212,17 @@ const SessionManager = {
                 card.appendChild(deleteBtn);
             }
         });
-        
-        console.log('✅ Boutons ajoutés');
+    }
+};
+
+// Initialisation
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('📦 SessionManager V9.2 initialisé');
+    SessionManager.init();
+});
+
+// Export global
+if (typeof window !== 'undefined') {
+    window.SessionManager = SessionManager;
+    console.log('✅ SessionManager V9.2 disponible');
+}
