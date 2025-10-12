@@ -43,7 +43,24 @@ const SessionManager = {
     },
 
     /**
-     * ✅ AJOUTER CETTE FONCTION ICI (APRÈS minutesToHHMMSS)
+     * Convertir hh:mm:ss en minutes 
+     */
+    hhmmssToMinutes(timeStr) {
+        if (!timeStr || timeStr.trim() === '') return 0;
+        const parts = timeStr.split(':').map(p => parseInt(p) || 0);
+        if (parts.length === 3) {
+            const [hours, mins, secs] = parts;
+            return hours * 60 + mins + secs / 60;
+        } else if (parts.length === 2) {
+            const [mins, secs] = parts;
+            return mins + secs / 60;
+        } else if (parts.length === 1) {
+            return parts[0];
+        }
+        return 0;
+    },
+    
+    /**
      * Convertir hh:mm:ss en minutes
      */
     hhmmssToMinutes(timeStr) {
@@ -429,7 +446,7 @@ const SessionManager = {
             id: `step-${Date.now()}-${Math.random()}`,
             type: name,
             durationType: 'time',
-            duration: 10,
+            duration: 0,
             distance: 1,
             distanceUnit: 'km',
             pace: 'E',
@@ -442,6 +459,8 @@ const SessionManager = {
                 intensity: 'none'
             }
         };
+
+         console.log(`🔍 Parsing description: "${description}"`); // ✅ AJOUTÉ : Debug
         
         // Parser répétitions
         const repeatMatch = description.match(/(\d+)x\s*/i);
@@ -478,6 +497,10 @@ const SessionManager = {
             step.durationType = 'time';
             step.duration = parseInt(timeMinMatch[1]);
             console.log(`⏱️ Temps détecté (min): ${step.duration} min`);
+        }
+
+        if (step.durationType === 'time' && step.duration === 0) {
+            console.warn(`⚠️ Aucun temps trouvé dans: "${description}"`);
         }
         
         // Parser distance mètres
