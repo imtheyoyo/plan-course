@@ -1,13 +1,14 @@
 /**
  * ================================================
  * SessionManager.js
- * Version: 9.2.0 v2
+ * Version: 9.3.0
  * Date: 2025-01-11
- * Heure: 16:30 UTC
+ * Heure: 17:00 UTC
  * ================================================
  * IMPORTANT: Support du format liste pyramide
  * - Format répétitions: "10x 400m + 5x 1000m"
- * - Format liste: "400m + 600m + 800m à 4:20/km" ← NOUVEAU
+ * - Format liste: "400m + 600m + 800m à 4:20/km"
+ * - Durée au format hh:mm:ss ← NOUVEAU V9.3
  * ================================================
  */
 
@@ -15,6 +16,40 @@ const SessionManager = {
     // Variables globales pour le modal structuré
     currentSteps: [],
     currentPaces: null,
+    
+    /**
+     * Convertir minutes en hh:mm:ss
+     */
+    minutesToHHMMSS(minutes) {
+        const totalSeconds = Math.round(minutes * 60);
+        const hours = Math.floor(totalSeconds / 3600);
+        const mins = Math.floor((totalSeconds % 3600) / 60);
+        const secs = totalSeconds % 60;
+        
+        if (hours > 0) {
+            return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        } else {
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+    },
+    
+    /**
+     * Convertir hh:mm:ss en minutes
+     */
+    hhmmssToMinutes(timeStr) {
+        const parts = timeStr.split(':').map(p => parseInt(p) || 0);
+        
+        if (parts.length === 3) {
+            // hh:mm:ss
+            return parts[0] * 60 + parts[1] + parts[2] / 60;
+        } else if (parts.length === 2) {
+            // mm:ss
+            return parts[0] + parts[1] / 60;
+        } else {
+            // mm seulement
+            return parts[0];
+        }
+    },
     
     /**
      * Initialiser les événements
@@ -354,17 +389,35 @@ const SessionManager = {
             console.log(`🔁 Répétition: ${step.repeat}x`);
         }
         
-        // Parser temps
+        // Parser temps au format hh:mm:ss ou mm:ss ou XX min
+        const timeHHMMSSMatch = description.match(/(\d+):(\d+):(\d+)/);
+        const timeMMSSMatch = description.match(/(\d+):(\d+)(?!\d)/);
         const timeMinMatch = description.match(/(\d+)\s*min(?!\s*à)/i);
-        if (timeMinMatch) {
+        
+        if (timeHHMMSSMatch) {
+            // Format hh:mm:ss
+            const hours = parseInt(timeHHMMSSMatch[1]);
+            const mins = parseInt(timeHHMMSSMatch[2]);
+            const secs = parseInt(timeHHMMSSMatch[3]);
+            step.durationType = 'time';
+            step.duration = hours * 60 + mins + secs / 60;
+            console.log(`⏱️ Temps détecté: ${hours}:${mins}:${secs} → ${step.duration} min`);
+        } else if (timeMMSSMatch && !description.match(/\d+:\d+\/km/)) {
+            // Format mm:ss (mais pas une allure comme 4:21/km)
+            const mins = parseInt(timeMMSSMatch[1]);
+            const secs = parseInt(timeMMSSMatch[2]);
+            step.durationType = 'time';
+            step.duration = mins + secs / 60;
+            console.log(`⏱️ Temps détecté: ${mins}:${secs} → ${step.duration} min`);
+        } else if (timeMinMatch) {
             step.durationType = 'time';
             step.duration = parseInt(timeMinMatch[1]);
-            console.log(`⏱️ Temps: ${step.duration} min`);
+            console.log(`⏱️ Temps détecté: ${step.duration} min`);
         }
         
         // Parser distance mètres
         const distanceMetersMatch = description.match(/(?<!\d)(\d+(?:\.\d+)?)\s*m(?!\s*min)(?=\s|$|à)/i);
-        if (distanceMetersMatch && !timeMinMatch) {
+        if (distanceMetersMatch && !timeMinMatch && !timeMMSSMatch && !timeHHMMSSMatch) {
             step.durationType = 'distance';
             step.distance = parseFloat(distanceMetersMatch[1]);
             step.distanceUnit = 'm';
@@ -373,7 +426,7 @@ const SessionManager = {
         
         // Parser distance km
         const distanceKmMatch = description.match(/(\d+(?:\.\d+)?)\s*km(?=\s|$|à)/i);
-        if (distanceKmMatch && !timeMinMatch && !distanceMetersMatch) {
+        if (distanceKmMatch && !timeMinMatch && !distanceMetersMatch && !timeMMSSMatch && !timeHHMMSSMatch) {
             step.durationType = 'distance';
             step.distance = parseFloat(distanceKmMatch[1]);
             step.distanceUnit = 'km';
@@ -518,9 +571,10 @@ const SessionManager = {
             
             let desc;
             if (step.durationType === 'time') {
+                const timeStr = SessionManager.minutesToHHMMSS(step.duration);
                 desc = repeat > 1 
-                    ? `${repeat}x ${step.duration} min à ${paceStr}`
-                    : `${step.duration} min à ${paceStr}`;
+                    ? `${repeat}x ${timeStr} à ${paceStr}`
+                    : `${timeStr} à ${paceStr}`;
             } else {
                 const distValue = step.distanceUnit === 'm' ? 
                     `${step.distance}m` : `${step.distance}km`;
@@ -727,9 +781,10 @@ const SessionManager = {
                         <div class="step-row">
                             <label>Temps total</label>
                             <div class="step-input-group">
-                                <input type="number" value="${step.duration}" min="1" max="300"
+                                <input type="text" value="${SessionManager.minutesToHHMMSS(step.duration)}" 
+                                       placeholder="mm:ss ou hh:mm:ss"
                                        onchange="SessionManager.updateStep('${step.id}', 'duration', this.value)">
-                                <span>min</span>
+                                <span>hh:mm:ss</span>
                             </div>
                         </div>
                     ` : `
@@ -884,8 +939,16 @@ const SessionManager = {
         const step = SessionManager.currentSteps.find(s => s.id === stepId);
         if (!step) return;
         
-        step[field] = field === 'repeat' || field === 'duration' ? parseInt(value) : 
-                      field === 'distance' ? parseFloat(value) : value;
+        if (field === 'duration') {
+            // Convertir hh:mm:ss en minutes
+            step.duration = SessionManager.hhmmssToMinutes(value);
+        } else if (field === 'repeat') {
+            step.repeat = parseInt(value);
+        } else if (field === 'distance') {
+            step.distance = parseFloat(value);
+        } else {
+            step[field] = value;
+        }
         
         if (field === 'durationType') {
             if (value === 'distance') {
@@ -1102,9 +1165,10 @@ const SessionManager = {
             
             let desc;
             if (step.durationType === 'time') {
+                const timeStr = SessionManager.minutesToHHMMSS(step.duration);
                 desc = repeat > 1 
-                    ? `${repeat}x ${step.duration} min à ${paceStr}`
-                    : `${step.duration} min à ${paceStr}`;
+                    ? `${repeat}x ${timeStr} à ${paceStr}`
+                    : `${timeStr} à ${paceStr}`;
             } else {
                 const distValue = step.distanceUnit === 'm' ? 
                     `${step.distance}m` : `${step.distance}km`;
