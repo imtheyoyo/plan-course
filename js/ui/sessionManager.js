@@ -1,14 +1,16 @@
 /**
  * ================================================
  * SessionManager.js
- * Version: 9.3.0
+ * Version: 9.4.0
  * Date: 2025-01-11
- * Heure: 17:00 UTC
+ * Heure: 17:30 UTC
  * ================================================
  * IMPORTANT: Support du format liste pyramide
  * - Format répétitions: "10x 400m + 5x 1000m"
  * - Format liste: "400m + 600m + 800m à 4:20/km"
- * - Durée au format hh:mm:ss ← NOUVEAU V9.3
+ * - Durée au format hh:mm:ss avec validation
+ * - Liste de titres prédéfinis ← NOUVEAU V9.4
+ * - Allure "Pas de cible" ← NOUVEAU V9.4
  * ================================================
  */
 
@@ -16,6 +18,13 @@ const SessionManager = {
     // Variables globales pour le modal structuré
     currentSteps: [],
     currentPaces: null,
+    
+    // Liste des titres d'étapes autorisés
+    stepTitles: [
+        'Échauffement',
+        'Course à pied',
+        'Retour au calme'
+    ],
     
     /**
      * Convertir minutes en hh:mm:ss
@@ -71,6 +80,11 @@ const SessionManager = {
      * IMPORTANT : Résout le bug N/A en mappant E -> E_low
      */
     getPaceValue(paces, paceKey) {
+        // Si "Pas de cible", retourner une valeur par défaut
+        if (paceKey === 'none') {
+            return paces.E_low || 360;
+        }
+        
         const paceMap = {
             'E': 'E_low',
             'M': 'M',
@@ -559,7 +573,7 @@ const SessionManager = {
                 }
             }
             
-            const intensityMap = { E: 1, M: 2, T: 3, I: 4, R: 4, C: 3 };
+            const intensityMap = { E: 1, M: 2, T: 3, I: 4, R: 4, C: 3, none: 1 };
             maxIntensity = Math.max(maxIntensity, intensityMap[step.pace] || 1);
         });
         
@@ -578,15 +592,27 @@ const SessionManager = {
             let desc;
             if (step.durationType === 'time') {
                 const timeStr = SessionManager.minutesToHHMMSS(step.duration);
-                desc = repeat > 1 
-                    ? `${repeat}x ${timeStr} à ${paceStr}`
-                    : `${timeStr} à ${paceStr}`;
+                if (step.pace === 'none') {
+                    desc = repeat > 1 
+                        ? `${repeat}x ${timeStr}`
+                        : `${timeStr}`;
+                } else {
+                    desc = repeat > 1 
+                        ? `${repeat}x ${timeStr} à ${paceStr}`
+                        : `${timeStr} à ${paceStr}`;
+                }
             } else {
                 const distValue = step.distanceUnit === 'm' ? 
                     `${step.distance}m` : `${step.distance}km`;
-                desc = repeat > 1
-                    ? `${repeat}x ${distValue} à ${paceStr}`
-                    : `${distValue} à ${paceStr}`;
+                if (step.pace === 'none') {
+                    desc = repeat > 1
+                        ? `${repeat}x ${distValue}`
+                        : `${distValue}`;
+                } else {
+                    desc = repeat > 1
+                        ? `${repeat}x ${distValue} à ${paceStr}`
+                        : `${distValue} à ${paceStr}`;
+                }
             }
             
             if (step.isRepeat && step.recovery && !hasRecovery) {
@@ -749,9 +775,13 @@ const SessionManager = {
             <div class="session-step" data-step-id="${step.id}" draggable="true">
                 <div class="step-header">
                     <div class="step-drag-handle" style="cursor: grab;">⋮⋮</div>
-                    <input type="text" class="step-title" value="${step.type}" 
-                           onchange="SessionManager.updateStep('${step.id}', 'type', this.value)"
-                           placeholder="Nom de l'étape">
+                    <select class="step-title-select" 
+                            onchange="SessionManager.updateStep('${step.id}', 'type', this.value)"
+                            style="flex: 1; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.875rem;">
+                        ${SessionManager.stepTitles.map(title => 
+                            `<option value="${title}" ${step.type === title ? 'selected' : ''}>${title}</option>`
+                        ).join('')}
+                    </select>
                     <button class="step-delete" onclick="SessionManager.deleteStep('${step.id}')">
                         🗑️
                     </button>
@@ -820,6 +850,7 @@ const SessionManager = {
                         <label>Allure</label>
                         <select class="step-select" 
                                 onchange="SessionManager.updateStep('${step.id}', 'pace', this.value)">
+                            <option value="none" ${step.pace === 'none' ? 'selected' : ''}>Pas de cible</option>
                             <option value="E" ${step.pace === 'E' ? 'selected' : ''}>Endurance (${paces.E_low ? Formatters.secondsToPace(paces.E_low) : 'N/A'})</option>
                             <option value="M" ${step.pace === 'M' ? 'selected' : ''}>Marathon (${paces.M ? Formatters.secondsToPace(paces.M) : 'N/A'})</option>
                             <option value="T" ${step.pace === 'T' ? 'selected' : ''}>Seuil (${paces.T ? Formatters.secondsToPace(paces.T) : 'N/A'})</option>
@@ -1230,20 +1261,32 @@ const SessionManager = {
         SessionManager.currentSteps.forEach((step, index) => {
             const repeat = step.isRepeat ? step.repeat : 1;
             const paceValue = SessionManager.getPaceValue(paces, step.pace);
-            const paceStr = Formatters.secondsToPace(paceValue);
+            const paceStr = step.pace === 'none' ? '' : Formatters.secondsToPace(paceValue);
             
             let desc;
             if (step.durationType === 'time') {
                 const timeStr = SessionManager.minutesToHHMMSS(step.duration);
-                desc = repeat > 1 
-                    ? `${repeat}x ${timeStr} à ${paceStr}`
-                    : `${timeStr} à ${paceStr}`;
+                if (step.pace === 'none') {
+                    desc = repeat > 1 
+                        ? `${repeat}x ${timeStr}`
+                        : `${timeStr}`;
+                } else {
+                    desc = repeat > 1 
+                        ? `${repeat}x ${timeStr} à ${paceStr}`
+                        : `${timeStr} à ${paceStr}`;
+                }
             } else {
                 const distValue = step.distanceUnit === 'm' ? 
                     `${step.distance}m` : `${step.distance}km`;
-                desc = repeat > 1
-                    ? `${repeat}x ${distValue} à ${paceStr}`
-                    : `${distValue} à ${paceStr}`;
+                if (step.pace === 'none') {
+                    desc = repeat > 1
+                        ? `${repeat}x ${distValue}`
+                        : `${distValue}`;
+                } else {
+                    desc = repeat > 1
+                        ? `${repeat}x ${distValue} à ${paceStr}`
+                        : `${distValue} à ${paceStr}`;
+                }
             }
             
             if (step.isRepeat && step.recovery && !hasRecovery) {
