@@ -201,7 +201,7 @@ const Render = {
         // 🆕 MODIFICATION : Emoji test mieux visible
         const testIcon = session.isTest ? ' 📊' : '';
         sessionEl.innerHTML = `
-            <p class="font-bold text-white pointer-events-none">${CONFIG.fullDayNames[dayIndex].substring(0,3)}: ${session.type}${testIcon} (~${(session.distance || 0).toFixed(1)} km)</p>
+            <p class="font-bold text-green-400 pointer-events-none">${CONFIG.fullDayNames[dayIndex].substring(0,3)}: ${session.type}${testIcon} (~${(session.distance || 0).toFixed(1)} km)</p>
             ${detailsHtml}
         `;
         
