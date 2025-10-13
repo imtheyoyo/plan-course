@@ -424,6 +424,20 @@ body {
 /* ===== BOUTONS D'ACTION SUR LES SÉANCES ===== */
 
 /* Bouton d'ajout sur les jours vides */
+.empty-day-slot {
+    position: relative;
+    min-height: 80px;
+    border: 2px dashed #374151;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.empty-day-slot:hover {
+    border-color: #10b981;
+    background: rgba(16, 185, 129, 0.05);
+}
+
+
 .add-session-btn {
     position: absolute;
     top: 50%;
