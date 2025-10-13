@@ -47,17 +47,18 @@ const Render = {
         const paceKeys = ['C', 'M', 'T', 'I', 'R'];
         const paceItems = paceKeys.map(key => `
             <div class="card p-2 rounded-md text-center">
-                <p class="font-bold text-green-400">${CONFIG.paceLabels[key]}</p>
-                <p class="text-white font-semibold">${Formatters.secondsToPace(planData.paces[key]).replace('/km', '')}</p>
+                <p class="font-bold pace-label">${CONFIG.paceLabels[key]}</p>
+                <p class="pace-value font-semibold">${Formatters.secondsToPace(planData.paces[key]).replace('/km', '')}</p>
             </div>
         `).join('');
-        
+    
         const enduranceItem = `
             <div class="card p-2 rounded-md text-center">
-                <p class="font-bold text-green-400">${CONFIG.paceLabels.E}</p>
-                <p class="text-white font-semibold">${Formatters.secondsToPace(planData.paces.E_high).replace('/km', '')} - ${Formatters.secondsToPace(planData.paces.E_low).replace('/km', '')}</p>
+                <p class="font-bold pace-label">${CONFIG.paceLabels.E}</p>
+                <p class="pace-value font-semibold">${Formatters.secondsToPace(planData.paces.E_high).replace('/km', '')} - ${Formatters.secondsToPace(planData.paces.E_low).replace('/km', '')}</p>
             </div>
         `;
+
         
         const header = document.createElement('div');
         header.className = 'mb-6 pb-4 border-b border-gray-700';
