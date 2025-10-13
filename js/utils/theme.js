@@ -2,7 +2,10 @@
  * ================================================
  * Theme Manager - Gestion mode sombre/clair
  * ================================================
- * V1.0.0 - 2025-10-12
+ * Version: 1.0.0
+ * Date: 2025-10-12
+ * Fichier: js/utils/theme.js
+ * ================================================
  */
 
 const ThemeManager = {
@@ -106,6 +109,8 @@ const ThemeManager = {
                 button.classList.remove('theme-toggle-animate');
             }, 300);
         }
+        
+        console.log(`🔄 Thème changé : ${currentTheme} → ${newTheme}`);
     },
     
     /**
@@ -141,8 +146,16 @@ const ThemeManager = {
         });
         
         // Accessibility
-        button.setAttribute('aria-label', 'Changer le thème');
-        button.setAttribute('title', 'Changer le thème');
+        button.setAttribute('role', 'button');
+        button.setAttribute('tabindex', '0');
+        
+        // Support clavier (Enter et Space)
+        button.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                this.toggleTheme();
+            }
+        });
     },
     
     /**
@@ -153,12 +166,24 @@ const ThemeManager = {
         if (!button) return;
         
         if (theme === this.THEMES.LIGHT) {
-            button.innerHTML = '🌙'; // Lune pour mode sombre
+            button.innerHTML = '🌙'; // Lune pour passer au mode sombre
             button.setAttribute('aria-label', 'Activer le mode sombre');
+            button.setAttribute('title', 'Mode sombre');
         } else {
-            button.innerHTML = '☀️'; // Soleil pour mode clair
+            button.innerHTML = '☀️'; // Soleil pour passer au mode clair
             button.setAttribute('aria-label', 'Activer le mode clair');
+            button.setAttribute('title', 'Mode clair');
         }
+    },
+    
+    /**
+     * Réinitialiser au thème par défaut
+     */
+    reset() {
+        localStorage.removeItem(this.STORAGE_KEY);
+        const systemTheme = this.getSystemTheme();
+        this.setTheme(systemTheme, false);
+        console.log('🔄 Thème réinitialisé');
     }
 };
 
@@ -171,3 +196,5 @@ if (typeof window !== 'undefined') {
 document.addEventListener('DOMContentLoaded', () => {
     ThemeManager.init();
 });
+
+console.log('✅ theme.js chargé');
