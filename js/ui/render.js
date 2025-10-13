@@ -47,7 +47,7 @@ const Render = {
         const paceKeys = ['C', 'M', 'T', 'I', 'R'];
         const paceItems = paceKeys.map(key => `
             <div class="card p-2 rounded-md text-center">
-                <p class="font-bold pace-label">${CONFIG.paceLabels[key]}</p>
+                <p class="font-bold text-green-400">${CONFIG.paceLabels[key]}</p>
                 <p class="pace-value font-semibold">${Formatters.secondsToPace(planData.paces[key]).replace('/km', '')}</p>
             </div>
         `).join('');
