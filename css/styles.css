@@ -1619,6 +1619,209 @@ select:focus-visible {
 [data-theme="light"] .step-drag-handle:hover {
     color: #2563eb !important;
 
+/* ===== TITRES DE SÉANCES ===== */
 
+/* Titre principal de la séance (ex: "VMA courte", "Endurance") */
+[data-theme="light"] .session-card .session-type,
+[data-theme="light"] .session-card h4,
+[data-theme="light"] .session-card h5,
+[data-theme="light"] .session-title {
+    color: #111827 !important;
+    font-weight: 700 !important;
+}
+
+/* Sous-titre de séance si présent */
+[data-theme="light"] .session-card .session-subtitle {
+    color: #374151 !important;
+}
+
+/* ===== ALLURES (PACES) ===== */
+
+/* Toutes les allures affichées dans les séances */
+[data-theme="light"] .session-card .pace,
+[data-theme="light"] .session-card .allure,
+[data-theme="light"] .pace-value,
+[data-theme="light"] .pace-label {
+    color: #1f2937 !important;
+    font-weight: 600 !important;
+}
+
+/* Format "X:XX/km" */
+[data-theme="light"] .session-card strong {
+    color: #1f2937 !important;
+}
+
+/* Détails avec allures (ex: "à 5:30/km") */
+[data-theme="light"] .session-card li,
+[data-theme="light"] .session-details li {
+    color: #374151 !important;
+}
+
+/* Strong dans les listes (allures en gras) */
+[data-theme="light"] .session-card li strong,
+[data-theme="light"] .session-details li strong {
+    color: #1f2937 !important;
+    font-weight: 700 !important;
+}
+
+/* ===== STRUCTURE DE SÉANCE ===== */
+
+/* Labels structure (Échauffement, Bloc, etc.) */
+[data-theme="light"] .session-structure-label,
+[data-theme="light"] .structure-label {
+    color: #111827 !important;
+    font-weight: 600 !important;
+}
+
+/* Valeurs de structure */
+[data-theme="light"] .session-structure-value,
+[data-theme="light"] .structure-value {
+    color: #374151 !important;
+}
+
+/* Distance affichée (ex: "7.5 km") */
+[data-theme="light"] .session-distance,
+[data-theme="light"] .distance-value {
+    color: #1f2937 !important;
+    font-weight: 600 !important;
+}
+
+/* Durée affichée (ex: "45:00") */
+[data-theme="light"] .session-duration,
+[data-theme="light"] .duration-value {
+    color: #1f2937 !important;
+    font-weight: 600 !important;
+}
+
+/* ===== MODAL ÉDITEUR - ALLURES ===== */
+
+/* Options dans les selects d'allures */
+[data-theme="light"] .step-select option,
+[data-theme="light"] select option {
+    color: #111827 !important;
+    background: white !important;
+}
+
+/* Allure sélectionnée dans le modal */
+[data-theme="light"] .step-select {
+    color: #111827 !important;
+}
+
+/* Labels "Allure" dans le modal */
+[data-theme="light"] .step-row label {
+    color: #374151 !important;
+    font-weight: 600 !important;
+}
+
+/* ===== RÉCAPITULATIF ALLURES ===== */
+
+/* Si vous avez un encadré récapitulatif des allures */
+[data-theme="light"] .pace-summary,
+[data-theme="light"] .allures-recap {
+    background: #f9fafb !important;
+    border: 1px solid #e5e7eb !important;
+}
+
+[data-theme="light"] .pace-summary .pace-label,
+[data-theme="light"] .allures-recap .pace-label {
+    color: #111827 !important;
+}
+
+[data-theme="light"] .pace-summary .pace-value,
+[data-theme="light"] .allures-recap .pace-value {
+    color: #059669 !important;
+    font-weight: 700 !important;
+}
+
+/* ===== BADGES TYPE DE SÉANCE ===== */
+
+/* Badge TEST si présent */
+[data-theme="light"] .session-card.test-session .session-type::before,
+[data-theme="light"] .session-card[data-type*="Test"] .session-type::before {
+    /* Garder fond gradient, texte blanc OK */
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    color: white !important;
+}
+
+/* ===== TOOLTIPS ALLURES ===== */
+
+/* Si vous avez des tooltips pour expliquer les allures */
+[data-theme="light"] .pace-tooltip,
+[data-theme="light"] .allure-info {
+    background: #1f2937 !important;
+    color: white !important;
+}
+
+/* ===== CARDS - TOUT LE TEXTE ===== */
+
+/* Forcer TOUT le texte dans les cartes de séances */
+[data-theme="light"] .session-card,
+[data-theme="light"] .session-card * {
+    color: #374151 !important;
+}
+
+/* Sauf les titres et allures qui doivent être plus foncés */
+[data-theme="light"] .session-card .session-type,
+[data-theme="light"] .session-card h4,
+[data-theme="light"] .session-card strong {
+    color: #111827 !important;
+}
+
+/* ===== PLAN DÉTAILLÉ - TEXTE DANS ACCORDÉONS ===== */
+
+/* Texte dans les détails de semaine dépliés */
+[data-theme="light"] .week-details .session-card {
+    background: white !important;
+}
+
+[data-theme="light"] .week-details .session-card p,
+[data-theme="light"] .week-details .session-card span,
+[data-theme="light"] .week-details .session-card div {
+    color: #374151 !important;
+}
+
+/* ===== INTENSITÉ - TEXTE ===== */
+
+/* Texte dans les cartes selon intensité */
+[data-theme="light"] .intensity-1 *,
+[data-theme="light"] .intensity-2 *,
+[data-theme="light"] .intensity-3 *,
+[data-theme="light"] .intensity-4 * {
+    color: #1f2937 !important;
+}
+
+/* Sauf les strong (allures) */
+[data-theme="light"] .intensity-1 strong,
+[data-theme="light"] .intensity-2 strong,
+[data-theme="light"] .intensity-3 strong,
+[data-theme="light"] .intensity-4 strong {
+    color: #111827 !important;
+    font-weight: 700 !important;
+}
+
+/* ===== FULL DATE (ex: "Lundi 20/10/2025") ===== */
+
+[data-theme="light"] .session-date,
+[data-theme="light"] .full-date {
+    color: #6b7280 !important;
+    font-size: 0.875rem !important;
+}
+
+/* ===== OVERRIDE GÉNÉRAL POUR SÉCURITÉ ===== */
+
+/* Si malgré tout certains textes restent illisibles */
+[data-theme="light"] .session-card p,
+[data-theme="light"] .session-card span:not(.badge),
+[data-theme="light"] .session-card div:not(.session-modal-header) {
+    color: #374151 !important;
+}
+
+/* Titres et éléments importants en très foncé */
+[data-theme="light"] .session-card h1,
+[data-theme="light"] .session-card h2,
+[data-theme="light"] .session-card h3,
+[data-theme="light"] .session-card h4,
+[data-theme="light"] .session-card h5 {
+    color: #111827 !important;
 
 /* ===== FIN DU FICHIER ===== */
