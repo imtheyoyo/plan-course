@@ -27,7 +27,7 @@ const ThemeManager = {
         // Charger le thème sauvegardé ou détecter préférence système
         const savedTheme = this.getSavedTheme();
         const systemTheme = this.getSystemTheme();
-        const initialTheme = savedTheme || this.THEMES.DARK;
+        const initialTheme = savedTheme || systemTheme;
         
         // Appliquer le thème initial
         this.setTheme(initialTheme, false);
@@ -55,7 +55,7 @@ const ThemeManager = {
         if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
             return this.THEMES.DARK;
         }
-        return this.THEMES.LIGHT;
+        return this.THEMES.DARK;
     },
     
     /**
