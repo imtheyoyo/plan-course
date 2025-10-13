@@ -1824,4 +1824,24 @@ select:focus-visible {
 [data-theme="light"] .session-card h5 {
     color: #111827 !important;
 
+/* Cartes d'allures */
+[data-theme="dark"] .pace-label {
+    color: #10b981;
+}
+
+[data-theme="dark"] .pace-value {
+    color: #f9fafb;
+}
+
+[data-theme="light"] .pace-label {
+    color: #059669;
+    font-weight: 700;
+}
+
+[data-theme="light"] .pace-value {
+    color: #111827;
+    font-weight: 600;
+}
+
+   
 /* ===== FIN DU FICHIER ===== */
