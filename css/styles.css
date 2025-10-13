@@ -1825,16 +1825,17 @@ select:focus-visible {
     color: #111827 !important;
 
 /* Cartes d'allures */
+/*#10b981;*/
 [data-theme="dark"] .pace-label {
-    color: #4ade80; /*#10b981;*/
+    color: #4ade80;
 }
 
 [data-theme="dark"] .pace-value {
     color: #f9fafb;
 }
-
+/*#059669;*/
 [data-theme="light"] .pace-label {
-    color: #4ade80; /*#059669;*/
+    color: #4ade80;
     font-weight: 700;
 }
 
