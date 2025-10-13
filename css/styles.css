@@ -1343,4 +1343,282 @@ select:focus-visible {
     }
 }
 
+/* ===== CORRECTIONS SPÉCIFIQUES MODE LIGHT ===== */
+
+/* Texte dans les cartes de séances */
+[data-theme="light"] .session-card {
+    color: var(--text-primary) !important;
+}
+
+[data-theme="light"] .session-card strong,
+[data-theme="light"] .session-card .session-type {
+    color: #1f2937 !important;
+}
+
+[data-theme="light"] .session-card ul li {
+    color: #4b5563 !important;
+}
+
+[data-theme="light"] .session-card ul li strong {
+    color: #2563eb !important;
+}
+
+/* Détails de séances (Bloc, Endurance, etc.) */
+[data-theme="light"] .session-details,
+[data-theme="light"] .session-description {
+    color: #374151 !important;
+}
+
+/* En-têtes de semaines */
+[data-theme="light"] .week-header {
+    color: #111827 !important;
+}
+
+[data-theme="light"] .week-header summary {
+    color: #111827 !important;
+}
+
+[data-theme="light"] .week-number,
+[data-theme="light"] .week-dates {
+    color: #1f2937 !important;
+}
+
+/* Stats de semaine (km, TSS) */
+[data-theme="light"] .week-stats,
+[data-theme="light"] .week-total {
+    color: #374151 !important;
+}
+
+[data-theme="light"] .week-stats strong {
+    color: #111827 !important;
+}
+
+/* Jours de la semaine */
+[data-theme="light"] .day-label,
+[data-theme="light"] .day-name {
+    color: #1f2937 !important;
+}
+
+/* Labels des formulaires */
+[data-theme="light"] label,
+[data-theme="light"] .form-label {
+    color: #111827 !important;
+}
+
+/* Texte des inputs */
+[data-theme="light"] input,
+[data-theme="light"] select,
+[data-theme="light"] textarea {
+    color: #111827 !important;
+}
+
+[data-theme="light"] input::placeholder {
+    color: #9ca3af !important;
+}
+
+/* Titres et headers */
+[data-theme="light"] h1,
+[data-theme="light"] h2,
+[data-theme="light"] h3,
+[data-theme="light"] h4,
+[data-theme="light"] h5,
+[data-theme="light"] h6 {
+    color: #111827 !important;
+}
+
+/* Sous-titres et descriptions */
+[data-theme="light"] .subtitle,
+[data-theme="light"] .description,
+[data-theme="light"] .info-text {
+    color: #4b5563 !important;
+}
+
+/* Version info et petits textes */
+[data-theme="light"] .version-info,
+[data-theme="light"] small,
+[data-theme="light"] .text-xs {
+    color: #6b7280 !important;
+}
+
+/* Onglets de phases */
+[data-theme="light"] .phase-tab {
+    color: #6b7280 !important;
+}
+
+[data-theme="light"] .phase-tab.active {
+    color: #111827 !important;
+}
+
+[data-theme="light"] .phase-tab:hover {
+    color: #1f2937 !important;
+}
+
+/* Accordéons details/summary */
+[data-theme="light"] details summary {
+    color: #111827 !important;
+}
+
+[data-theme="light"] details {
+    border-color: #e5e7eb !important;
+}
+
+/* Boutons secondaires */
+[data-theme="light"] .btn-secondary {
+    color: #111827 !important;
+    background: #f3f4f6 !important;
+}
+
+[data-theme="light"] .btn-secondary:hover {
+    background: #e5e7eb !important;
+}
+
+/* Step labels dans le modal */
+[data-theme="light"] .step-row label {
+    color: #374151 !important;
+}
+
+[data-theme="light"] .step-title-select,
+[data-theme="light"] .step-select {
+    color: #111827 !important;
+}
+
+/* Summary items */
+[data-theme="light"] .summary-label {
+    color: #6b7280 !important;
+}
+
+[data-theme="light"] .summary-value {
+    color: #059669 !important;
+}
+
+/* Liens */
+[data-theme="light"] a {
+    color: #2563eb !important;
+}
+
+[data-theme="light"] a:hover {
+    color: #1d4ed8 !important;
+}
+
+/* Graphique - labels */
+[data-theme="light"] .chart-label,
+[data-theme="light"] .chart-value {
+    color: #374151 !important;
+}
+
+/* Légende du graphique */
+[data-theme="light"] .chart-legend {
+    color: #4b5563 !important;
+}
+
+/* Texte dans les step-body */
+[data-theme="light"] .step-body span,
+[data-theme="light"] .step-input-group span {
+    color: #6b7280 !important;
+}
+
+/* Tables si présentes */
+[data-theme="light"] td {
+    color: #374151 !important;
+}
+
+[data-theme="light"] th {
+    color: #111827 !important;
+}
+
+/* Modals - texte général */
+[data-theme="light"] .session-modal-body p,
+[data-theme="light"] .session-modal-body span,
+[data-theme="light"] .session-modal-body div {
+    color: #374151 !important;
+}
+
+/* Form groups dans modals */
+[data-theme="light"] .form-group label {
+    color: #111827 !important;
+}
+
+/* Time hints et messages d'aide */
+[data-theme="light"] .time-hint,
+[data-theme="light"] .help-text {
+    color: #6b7280 !important;
+}
+
+/* Tests de contrôle */
+[data-theme="light"] .test-info-banner {
+    /* Garder le gradient, mais améliorer contraste */
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white !important;
+}
+
+/* Charge indicators - s'assurer que le texte est visible */
+[data-theme="light"] .load-indicator {
+    /* Les couleurs sont OK, pas besoin de modification */
+}
+
+/* Profil info */
+[data-theme="light"] .profile-info,
+[data-theme="light"] .user-stats {
+    color: #374151 !important;
+}
+
+/* Empty state messages */
+[data-theme="light"] .empty-state,
+[data-theme="light"] .no-data {
+    color: #6b7280 !important;
+}
+
+/* Tooltips si présents */
+[data-theme="light"] .tooltip {
+    background: #1f2937 !important;
+    color: white !important;
+}
+
+/* Badges et tags */
+[data-theme="light"] .badge,
+[data-theme="light"] .tag {
+    color: #111827 !important;
+}
+
+/* Headers de tableaux/listes */
+[data-theme="light"] .list-header,
+[data-theme="light"] .table-header {
+    color: #111827 !important;
+}
+
+/* Séparateurs de sections */
+[data-theme="light"] .section-title {
+    color: #111827 !important;
+}
+
+/* Texte dans les cartes vides */
+[data-theme="light"] .empty-day-slot {
+    color: #6b7280 !important;
+}
+
+/* Headers de modal structuré */
+[data-theme="light"] .session-modal-header p {
+    color: rgba(255, 255, 255, 0.95) !important;
+}
+
+/* Step headers */
+[data-theme="light"] .step-header {
+    background: #f9fafb !important;
+}
+
+/* Recovery section labels */
+[data-theme="light"] .step-recovery-section label {
+    color: #374151 !important;
+}
+
+/* Drag handle en mode light */
+[data-theme="light"] .step-drag-handle {
+    color: #9ca3af !important;
+}
+
+[data-theme="light"] .step-drag-handle:hover {
+    color: #2563eb !important;
+
+
+
 /* ===== FIN DU FICHIER ===== */
