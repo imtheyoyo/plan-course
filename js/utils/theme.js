@@ -27,7 +27,7 @@ const ThemeManager = {
         // Charger le thème sauvegardé ou détecter préférence système
         const savedTheme = this.getSavedTheme();
         const systemTheme = this.getSystemTheme();
-        const initialTheme = savedTheme || this.THEMES.DARK; /* systemTheme;*/
+        const initialTheme = this.THEMES.DARK; /*savedTheme || systemTheme;*/
         
         // Appliquer le thème initial
         this.setTheme(initialTheme, false);
