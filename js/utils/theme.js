@@ -109,6 +109,10 @@ const ThemeManager = {
                 button.classList.remove('theme-toggle-animate');
             }, 300);
         }
+        // Mettre à jour les graphiques
+        if (window.ChartsManager && window.STATE && window.STATE.currentPlanData) {
+            setTimeout(() => ChartsManager.updateTheme(newTheme), 350);
+        }
         
         console.log(`🔄 Thème changé : ${currentTheme} → ${newTheme}`);
     },
