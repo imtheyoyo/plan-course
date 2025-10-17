@@ -4,6 +4,8 @@
  * ================================================
  * Orchestration de tous les modules
  * Point d'entrée de l'application
+ * 
+ * VERSION 2.2.0 - Intégration SmartPlacement
  */
 
 const App = {
@@ -50,6 +52,10 @@ const App = {
                 Interactions.setupDragDrop();
                 
                 console.log('✅ Plan généré avec succès');
+                
+                // Afficher statistiques SmartPlacement si disponible
+                this.displayPlanStatistics(STATE.currentPlanData);
+                
             } catch (error) {
                 console.error('❌ Erreur lors de la génération:', error);
                 alert('Erreur lors de la génération du plan. Consultez la console pour plus de détails.');
@@ -138,6 +144,11 @@ const App = {
             }
         });
         
+        // Appliquer variations automatiques sur tout le plan
+        if (typeof SmartPlacement !== 'undefined') {
+            SmartPlacement.applyVariations(plan);
+        }
+        
         return {
             plan,
             paces,
@@ -147,6 +158,7 @@ const App = {
     
     /**
      * Générer les séances d'une semaine
+     * 🆕 VERSION 2.2.0 - Avec SmartPlacement
      */
     generateWeekSchedule(config) {
         const {
@@ -157,7 +169,6 @@ const App = {
         } = config;
         
         let allSessions = [];
-        const finalSessions = [];
         
         // Semaine de course (dernière semaine)
         if (isLastWeek) {
@@ -230,22 +241,63 @@ const App = {
             }
         });
         
-        // Placer les séances dans les jours
-        const availableDays = [...trainingDays];
-        const assignedDays = new Set();
+        // ============================================
+        // 🆕 PLACEMENT INTELLIGENT AVEC SMARTPLACEMENT
+        // ============================================
+        let finalSessions;
         
-        // 1. Placer la sortie longue
-        Placement.placeSession(longRunSession, longRunDay, availableDays, assignedDays, finalSessions);
-        
-        // 2. Placer les séances dures (qualité + test)
-        const hardSessions = allSessions.filter(s => (s.intensity >= 3 || s.isTest) && !s.type.includes('Sortie Longue'))
-            .sort((a, b) => (b.isTest ? 10 : b.intensity) - (a.isTest ? 10 : a.intensity));
-        
-        const remainingDays = Placement.placeHardSessions(hardSessions, availableDays.filter(d => !assignedDays.has(d)), assignedDays, finalSessions);
-        
-        // 3. Placer les footings
-        const otherSessions = allSessions.filter(s => s.intensity < 3 && !s.type.includes('Sortie Longue'));
-        Placement.placeEasySessions(otherSessions, remainingDays, finalSessions);
+        if (typeof SmartPlacement !== 'undefined') {
+            // Utiliser SmartPlacement pour optimisation
+            const optimized = SmartPlacement.optimizeWeek(
+                allSessions,
+                trainingDays,
+                longRunDay,
+                {
+                    weekNumber,
+                    phase: phaseType,
+                    isRecoveryWeek,
+                    totalKm: weeklyKm
+                },
+                runnerLevel,
+                paces
+            );
+            
+            finalSessions = optimized.sessions;
+            
+            // Stocker les métadonnées d'optimisation
+            // (pourront être affichées dans l'UI plus tard)
+            finalSessions.metadata = {
+                alerts: optimized.alerts,
+                recommendations: optimized.recommendations,
+                fatigue: optimized.fatigue,
+                tss: optimized.tss
+            };
+            
+            // Logger si alertes critiques
+            if (optimized.alerts.length > 0) {
+                console.warn(`⚠️ Semaine ${weekNumber}:`, optimized.alerts);
+            }
+            
+        } else {
+            // Fallback: utiliser ancien placement si SmartPlacement non chargé
+            console.warn('⚠️ SmartPlacement non disponible, utilisation placement basique');
+            finalSessions = [];
+            const availableDays = [...trainingDays];
+            const assignedDays = new Set();
+            
+            // 1. Placer la sortie longue
+            Placement.placeSession(longRunSession, longRunDay, availableDays, assignedDays, finalSessions);
+            
+            // 2. Placer les séances dures (qualité + test)
+            const hardSessions = allSessions.filter(s => (s.intensity >= 3 || s.isTest) && !s.type.includes('Sortie Longue'))
+                .sort((a, b) => (b.isTest ? 10 : b.intensity) - (a.isTest ? 10 : a.intensity));
+            
+            const remainingDays = Placement.placeHardSessions(hardSessions, availableDays.filter(d => !assignedDays.has(d)), assignedDays, finalSessions);
+            
+            // 3. Placer les footings
+            const otherSessions = allSessions.filter(s => s.intensity < 3 && !s.type.includes('Sortie Longue'));
+            Placement.placeEasySessions(otherSessions, remainingDays, finalSessions);
+        }
         
         // Ajouter les dates complètes
         finalSessions.forEach(s => {
@@ -541,6 +593,46 @@ const App = {
         }
         
         return Math.max(totalKm, 1);
+    },
+    
+    /**
+     * 🆕 Afficher statistiques du plan généré
+     */
+    displayPlanStatistics(planData) {
+        if (!planData || !planData.plan) return;
+        
+        let totalAlerts = 0;
+        let totalRecommendations = 0;
+        let criticalWeeks = [];
+        
+        planData.plan.forEach(week => {
+            if (week.sessions.metadata) {
+                const alerts = week.sessions.metadata.alerts || [];
+                const recommendations = week.sessions.metadata.recommendations || [];
+                
+                totalAlerts += alerts.length;
+                totalRecommendations += recommendations.length;
+                
+                // Identifier semaines critiques
+                const critical = alerts.filter(a => a.type === 'critical');
+                if (critical.length > 0) {
+                    criticalWeeks.push(week.weekNumber);
+                }
+            }
+        });
+        
+        console.log('\n📊 === STATISTIQUES SMARTPLACEMENT ===');
+        console.log(`✅ Plan optimisé avec ${planData.plan.length} semaines`);
+        console.log(`⚠️ ${totalAlerts} alerte(s) détectée(s)`);
+        console.log(`💡 ${totalRecommendations} recommandation(s)`);
+        
+        if (criticalWeeks.length > 0) {
+            console.warn(`🚨 Semaines critiques: ${criticalWeeks.join(', ')}`);
+            console.warn('   → Consultez les détails pour ajuster le plan');
+        } else {
+            console.log('✅ Aucune surcharge critique détectée');
+        }
+        console.log('=====================================\n');
     }
 };
 
