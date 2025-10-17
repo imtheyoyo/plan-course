@@ -341,6 +341,20 @@ const Render = {
         const barWidth = Math.max(20, (chartWidth / planData.plan.length) - 4);
         
         planData.plan.forEach((week, index) => {
+            // Conteneur pour la barre + label
+            const barContainer = document.createElement('div');
+            barContainer.className = 'chart-bar-container';
+            barContainer.style.position = 'absolute';
+            barContainer.style.left = `${index * (barWidth + 4)}px`;
+            barContainer.style.width = `${barWidth}px`;
+            barContainer.style.height = '100%';
+            barContainer.style.display = 'flex';
+            barContainer.style.flexDirection = 'column';
+            barContainer.style.justifyContent = 'flex-end';
+            barContainer.style.alignItems = 'center';
+            barContainer.style.cursor = 'pointer';
+            
+            // Barre
             const bar = document.createElement('div');
             const heightPercent = (week.tss / maxTSS) * 100;
             
@@ -357,23 +371,69 @@ const Render = {
             }
             
             bar.className = `chart-bar ${loadClass}`;
-            bar.style.left = `${index * (barWidth + 4)}px`;
-            bar.style.width = `${barWidth}px`;
+            bar.style.width = '100%';
             bar.style.height = `${heightPercent}%`;
+            bar.style.marginBottom = '4px';
             bar.title = `S${week.weekNumber}: ${Math.round(week.tss)} TSS - ${week.totalKm}km - ${week.phase}${hasTest ? ' - 📊 TEST' : ''}`;
             
-            bar.addEventListener('click', () => {
+            // Label "S1", "S2", etc.
+            const label = document.createElement('div');
+            label.className = 'chart-bar-label';
+            label.textContent = `S${week.weekNumber}`;
+            label.style.fontSize = '10px';
+            label.style.color = '#9ca3af';
+            label.style.textAlign = 'center';
+            label.style.marginTop = '2px';
+            label.style.whiteSpace = 'nowrap';
+            label.style.pointerEvents = 'none';
+            
+            // Événement click sur le conteneur
+            barContainer.addEventListener('click', () => {
+                // 1. Trouver l'élément semaine
                 const weekEl = document.querySelector(`[data-week-index="${index}"]`);
-                if (weekEl) {
-                    const detailsEl = weekEl.closest('details');
-                    if (detailsEl) {
-                        detailsEl.open = true;
-                        detailsEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }
-                }
+                if (!weekEl) return;
+                
+                const detailsEl = weekEl.closest('details');
+                if (!detailsEl) return;
+                
+                // 2. Ouvrir la semaine
+                detailsEl.open = true;
+                
+                // 3. Activer la phase correspondante
+                const phase = week.phase;
+                this.filterWeeksByPhase(phase);
+                
+                // 4. Scroll vers la semaine avec un petit délai pour l'animation
+                setTimeout(() => {
+                    detailsEl.scrollIntoView({ 
+                        behavior: 'smooth', 
+                        block: 'center' 
+                    });
+                    
+                    // 5. Flash visuel pour attirer l'attention
+                    detailsEl.style.transition = 'box-shadow 0.3s ease';
+                    detailsEl.style.boxShadow = '0 0 0 3px rgba(34, 211, 238, 0.5)';
+                    
+                    setTimeout(() => {
+                        detailsEl.style.boxShadow = '';
+                    }, 1000);
+                }, 100);
             });
             
-            chartContainer.appendChild(bar);
+            // Effet hover
+            barContainer.addEventListener('mouseenter', () => {
+                bar.style.opacity = '0.8';
+                label.style.color = '#fff';
+            });
+            
+            barContainer.addEventListener('mouseleave', () => {
+                bar.style.opacity = '1';
+                label.style.color = '#9ca3af';
+            });
+            
+            barContainer.appendChild(bar);
+            barContainer.appendChild(label);
+            chartContainer.appendChild(barContainer);
         });
     },
     
