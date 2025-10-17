@@ -137,16 +137,14 @@
 
             <!-- MAIN CONTENT -->
             <main id="plan-output" class="lg:col-span-2 space-y-6">
+                <!-- Placeholder initial -->
                 <div id="plan-placeholder" class="card p-6 rounded-xl shadow-lg min-h-[600px] flex flex-col items-center justify-center text-center">
                     <svg class="w-24 h-24 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
                     <h3 class="mt-4 text-2xl font-bold text-white">Votre plan d'entraînement apparaîtra ici.</h3>
                     <p class="mt-1 text-gray-400">Remplissez les informations à gauche et cliquez sur "Générer".</p>
                 </div>
-                
-                <div id="plan-content-wrapper" class="hidden">
-                    <div id="plan-content" class="space-y-6"></div>
-                </div>
-                
+
+                <!-- Graphique de charge -->
                 <div id="load-chart-container" class="card p-6 rounded-xl shadow-lg hidden">
                     <h3 class="text-xl font-bold text-white mb-4">Visualisation de la charge d'entraînement</h3>
                     <div id="load-chart" class="bg-gray-900 rounded-lg p-4"></div>
@@ -157,7 +155,13 @@
                         <div class="flex items-center"><div class="w-3 h-3 rounded bg-red-500 mr-1"></div> Très élevée</div>
                     </div>
                 </div>
-
+                
+                <!-- Plan de course -->
+                <div id="plan-content-wrapper" class="hidden">
+                    <div id="plan-content" class="space-y-6"></div>
+                </div>
+                
+                
         <!-- MODAL EDITION -->
         <div id="edit-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 hidden z-50">
             <div class="card rounded-xl shadow-lg w-full max-w-md p-6">
