@@ -5,7 +5,8 @@
  * Orchestration de tous les modules
  * Point d'entrée de l'application
  * 
- * VERSION 2.2.0 - Intégration SmartPlacement
+ * VERSION 2.2.1 - Correctifs bugs critiques
+ * Date: 20 octobre 2025
  */
 
 const App = {
@@ -53,7 +54,7 @@ const App = {
                 
                 console.log('✅ Plan généré avec succès');
                 
-                // Afficher statistiques SmartPlacement si disponible
+                // ✅ BUG FIX #2: Afficher statistiques SmartPlacement (inline)
                 this.displayPlanStatistics(STATE.currentPlanData);
                 
             } catch (error) {
@@ -61,6 +62,50 @@ const App = {
                 alert('Erreur lors de la génération du plan. Consultez la console pour plus de détails.');
             }
         });
+    },
+    
+    /**
+     * ✅ BUG FIX #2: Fonction displayPlanStatistics déplacée dans App
+     */
+    displayPlanStatistics(planData) {
+        if (!planData || !planData.plan) return;
+        
+        // Vérifier si SmartPlacement est disponible
+        if (typeof SmartPlacement === 'undefined') {
+            console.log('ℹ️ SmartPlacement non chargé - statistiques non disponibles');
+            return;
+        }
+        
+        let totalAlerts = 0;
+        let totalRecommendations = 0;
+        let criticalWeeks = [];
+        
+        planData.plan.forEach(week => {
+            const alerts = week.alerts || [];
+            const recommendations = week.recommendations || [];
+            
+            totalAlerts += alerts.length;
+            totalRecommendations += recommendations.length;
+            
+            // Identifier semaines critiques
+            const critical = alerts.filter(a => a.type === 'critical');
+            if (critical.length > 0) {
+                criticalWeeks.push(week.weekNumber);
+            }
+        });
+        
+        console.log('\n📊 === STATISTIQUES SMARTPLACEMENT ===');
+        console.log(`✅ Plan optimisé avec ${planData.plan.length} semaines`);
+        console.log(`⚠️ ${totalAlerts} alerte(s) détectée(s)`);
+        console.log(`💡 ${totalRecommendations} recommandation(s)`);
+        
+        if (criticalWeeks.length > 0) {
+            console.warn(`🚨 Semaines critiques: ${criticalWeeks.join(', ')}`);
+            console.warn('   → Consultez les détails pour ajuster le plan');
+        } else {
+            console.log('✅ Aucune surcharge critique détectée');
+        }
+        console.log('=====================================\n');
     },
     
     /**
@@ -158,7 +203,7 @@ const App = {
     
     /**
      * Générer les séances d'une semaine
-     * 🆕 VERSION 2.2.0 - Avec SmartPlacement
+     * ✅ VERSION 2.2.1 - Avec correctifs bugs #1 et #4
      */
     generateWeekSchedule(config) {
         const {
@@ -179,7 +224,7 @@ const App = {
         let testSession = null;
         if (isTestWeek) {
             testSession = {
-                type: raceDistanceKm >= 21 ? '📊 Test 5km' : '📊 Test VMA (Demi-Cooper)',
+                type: raceDistanceKm >= 21 ? '🔬 Test 5km' : '🔬 Test VMA (Demi-Cooper)',
                 structure: {
                     echauffement: "20 min EF + 3 accélérations",
                     bloc: raceDistanceKm >= 21 
@@ -242,9 +287,15 @@ const App = {
         });
         
         // ============================================
-        // 🆕 PLACEMENT INTELLIGENT AVEC SMARTPLACEMENT
+        // ✅ BUG FIX #1 et #4: PLACEMENT INTELLIGENT AVEC SMARTPLACEMENT
         // ============================================
         let finalSessions;
+        const week = {
+            weekNumber,
+            phase: phaseType,
+            isRecoveryWeek,
+            totalKm: weeklyKm
+        };
         
         if (typeof SmartPlacement !== 'undefined') {
             // Utiliser SmartPlacement pour optimisation
@@ -252,35 +303,28 @@ const App = {
                 allSessions,
                 trainingDays,
                 longRunDay,
-                {
-                    weekNumber,
-                    phase: phaseType,
-                    isRecoveryWeek,
-                    totalKm: weeklyKm
-                },
+                week,
                 runnerLevel,
                 paces
             );
             
             finalSessions = optimized.sessions;
             
-            // Stocker les métadonnées d'optimisation
-            // (pourront être affichées dans l'UI plus tard)
-            finalSessions.metadata = {
-                alerts: optimized.alerts,
-                recommendations: optimized.recommendations,
-                fatigue: optimized.fatigue,
-                tss: optimized.tss
-            };
+            // ✅ FIX BUG #4: Stocker metadata dans week, PAS dans finalSessions (qui est un array)
+            week.alerts = optimized.alerts || [];
+            week.recommendations = optimized.recommendations || [];
+            week.fatigue = optimized.fatigue || {};
+            week.tss = optimized.tss || 0;
             
             // Logger si alertes critiques
-            if (optimized.alerts.length > 0) {
+            if (optimized.alerts && optimized.alerts.length > 0) {
                 console.warn(`⚠️ Semaine ${weekNumber}:`, optimized.alerts);
             }
             
         } else {
-            // Fallback: utiliser ancien placement si SmartPlacement non chargé
+            // ✅ FIX BUG #1: Fallback vers placement basique si SmartPlacement non disponible
             console.warn('⚠️ SmartPlacement non disponible, utilisation placement basique');
+            
             finalSessions = [];
             const availableDays = [...trainingDays];
             const assignedDays = new Set();
@@ -297,6 +341,11 @@ const App = {
             // 3. Placer les footings
             const otherSessions = allSessions.filter(s => s.intensity < 3 && !s.type.includes('Sortie Longue'));
             Placement.placeEasySessions(otherSessions, remainingDays, finalSessions);
+            
+            // Metadata vide si pas de SmartPlacement
+            week.alerts = [];
+            week.recommendations = [];
+            week.fatigue = {};
         }
         
         // Ajouter les dates complètes
@@ -305,6 +354,7 @@ const App = {
             s.fullDate = `${CONFIG.fullDayNames[s.day]} ${DateUtils.format(sessionDate)}`;
         });
         
+        // Retourner les sessions triées + stocker metadata dans week parent (sera fait dans generatePlan)
         return finalSessions.sort((a, b) => a.day - b.day);
     },
     
@@ -593,46 +643,6 @@ const App = {
         }
         
         return Math.max(totalKm, 1);
-    },
-    
-    /**
-     * 🆕 Afficher statistiques du plan généré
-     */
-    displayPlanStatistics(planData) {
-        if (!planData || !planData.plan) return;
-        
-        let totalAlerts = 0;
-        let totalRecommendations = 0;
-        let criticalWeeks = [];
-        
-        planData.plan.forEach(week => {
-            if (week.sessions.metadata) {
-                const alerts = week.sessions.metadata.alerts || [];
-                const recommendations = week.sessions.metadata.recommendations || [];
-                
-                totalAlerts += alerts.length;
-                totalRecommendations += recommendations.length;
-                
-                // Identifier semaines critiques
-                const critical = alerts.filter(a => a.type === 'critical');
-                if (critical.length > 0) {
-                    criticalWeeks.push(week.weekNumber);
-                }
-            }
-        });
-        
-        console.log('\n📊 === STATISTIQUES SMARTPLACEMENT ===');
-        console.log(`✅ Plan optimisé avec ${planData.plan.length} semaines`);
-        console.log(`⚠️ ${totalAlerts} alerte(s) détectée(s)`);
-        console.log(`💡 ${totalRecommendations} recommandation(s)`);
-        
-        if (criticalWeeks.length > 0) {
-            console.warn(`🚨 Semaines critiques: ${criticalWeeks.join(', ')}`);
-            console.warn('   → Consultez les détails pour ajuster le plan');
-        } else {
-            console.log('✅ Aucune surcharge critique détectée');
-        }
-        console.log('=====================================\n');
     }
 };
 
