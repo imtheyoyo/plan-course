@@ -271,6 +271,12 @@ const App = {
             paces
         );
         
+        // 🆕 Créer le planning hebdomadaire et le valider
+        const weekSchedule = this.generateWeekSchedule(sessions, userInput.trainingDays || [1, 3, 5, 6]);
+        
+        // 🆕 Valider le placement des séances
+        const validation = this.validatePlacement(weekSchedule, level);
+        
         // Calculer TSS et fatigue
         const totalTSS = this.calculateWeekTSS(sessions);
         const fatigue = this.calculateFatigue(totalTSS, accumulatedLoad);
@@ -280,16 +286,117 @@ const App = {
             number: weekNumber,
             phase: phase.name,
             isRecovery,
-            sessions,
+            sessions: weekSchedule,  // Planning avec jours assignés
             totalTSS,
             fatigue,
-            // Metadata stockées au niveau de la semaine
-            alerts: [],
-            recommendations: [],
-            adjustments: 0
+            // Metadata stockées au niveau de la semaine + validation
+            alerts: validation.errors.map(e => e.message).concat(validation.warnings.map(w => w.message)),
+            recommendations: validation.recommendations.map(r => r.message),
+            adjustments: 0,
+            validationScore: validation.score,
+            validationResult: validation
         };
         
         return week;
+    }
+    
+    /**
+     * 🆕 Générer le planning hebdomadaire avec jours assignés
+     */
+    generateWeekSchedule(sessions, trainingDays) {
+        const schedule = new Array(7).fill(null);
+        
+        // Trier les séances par priorité de placement
+        const qualitySessions = sessions.filter(s => s.type === 'quality' || s.intensity === 'I' || s.intensity === 'T');
+        const longRuns = sessions.filter(s => s.type === 'long');
+        const easySessions = sessions.filter(s => s.type === 'easy' || s.type === 'recovery');
+        
+        // Jours optimaux par défaut
+        const optimalQualityDays = [1, 3, 5];  // Mardi, Jeudi, Samedi
+        const optimalLongDay = 6;               // Dimanche
+        
+        // Placer les séances de qualité en priorité
+        let qualityIndex = 0;
+        qualitySessions.forEach(session => {
+            let placed = false;
+            
+            // Essayer les jours optimaux d'abord
+            for (const day of optimalQualityDays) {
+                if (trainingDays.includes(day) && !schedule[day]) {
+                    schedule[day] = { ...session, assignedDay: day };
+                    placed = true;
+                    qualityIndex++;
+                    break;
+                }
+            }
+            
+            // Si pas placé, utiliser n'importe quel jour disponible
+            if (!placed) {
+                for (const day of trainingDays) {
+                    if (!schedule[day]) {
+                        schedule[day] = { ...session, assignedDay: day };
+                        break;
+                    }
+                }
+            }
+        });
+        
+        // Placer la sortie longue
+        if (longRuns.length > 0) {
+            if (trainingDays.includes(optimalLongDay) && !schedule[optimalLongDay]) {
+                schedule[optimalLongDay] = { ...longRuns[0], assignedDay: optimalLongDay };
+            } else {
+                // Trouver un autre jour
+                for (const day of trainingDays) {
+                    if (!schedule[day]) {
+                        schedule[day] = { ...longRuns[0], assignedDay: day };
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // Placer les séances faciles
+        easySessions.forEach(session => {
+            for (const day of trainingDays) {
+                if (!schedule[day]) {
+                    schedule[day] = { ...session, assignedDay: day };
+                    break;
+                }
+            }
+        });
+        
+        // Filtrer les sessions placées et retourner
+        return schedule.filter(s => s !== null);
+    }
+    
+    /**
+     * 🆕 Valider le placement des séances
+     */
+    validatePlacement(schedule, level) {
+        // Vérifier si PlacementValidator existe
+        if (typeof PlacementValidator !== 'undefined' && 
+            typeof PlacementValidator.validateWeekSchedule === 'function') {
+            
+            // Convertir en format attendu par le validateur
+            const fullSchedule = new Array(7).fill(null);
+            schedule.forEach(session => {
+                if (session.assignedDay !== undefined) {
+                    fullSchedule[session.assignedDay] = session;
+                }
+            });
+            
+            return PlacementValidator.validateWeekSchedule(fullSchedule, level);
+        } else {
+            console.warn('⚠️ PlacementValidator non disponible');
+            return {
+                valid: true,
+                errors: [],
+                warnings: [],
+                recommendations: [],
+                score: 100
+            };
+        }
     },
     
     /**
