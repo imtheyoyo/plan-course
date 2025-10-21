@@ -186,6 +186,17 @@ const Render = {
         // ✅ BUG FIX #3: Accéder directement à week.alerts
         const alerts = week.alerts || [];
         const hasAlerts = alerts.length > 0;
+        const validationScore = week.validationScore || 100;
+        
+        // 🆕 Badge de validation coloré selon le score
+        let validationBadge = '';
+        if (validationScore < 60) {
+            validationBadge = '<span class="badge-error">⛔ Placement risqué</span>';
+        } else if (validationScore < 80) {
+            validationBadge = '<span class="badge-warning">⚠️ À surveiller</span>';
+        } else if (validationScore >= 95) {
+            validationBadge = '<span class="badge-success">✅ Optimal</span>';
+        }
         
         const totalKm = week.sessions.reduce((sum, s) => sum + (s.volume || 0), 0);
         
@@ -194,7 +205,7 @@ const Render = {
                 <div class="flex items-center space-x-2">
                     <span class="text-2xl font-bold text-white">S${week.number}</span>
                     ${week.isRecovery ? '<span class="badge-recovery">Récup</span>' : ''}
-                    ${hasAlerts ? '<span class="badge-alert">⚠️</span>' : ''}
+                    ${validationBadge}
                 </div>
                 <div class="text-sm text-gray-400">
                     <span class="font-semibold text-white">${week.phase}</span>
@@ -202,6 +213,7 @@ const Render = {
                     <span>${totalKm.toFixed(1)} km</span>
                     <span class="mx-2">•</span>
                     <span>TSS: ${week.totalTSS}</span>
+                    ${validationScore < 100 ? `<span class="mx-2">•</span><span class="text-yellow-400">Score: ${validationScore}/100</span>` : ''}
                 </div>
             </div>
             <div class="flex items-center space-x-3">
@@ -257,9 +269,82 @@ const Render = {
         // ✅ BUG FIX #3: Alertes accessibles directement
         const alerts = week.alerts || [];
         const recommendations = week.recommendations || [];
+        const validationResult = week.validationResult;
         
-        // Afficher les alertes si présentes
-        if (alerts.length > 0) {
+        // 🆕 Afficher le rapport de validation détaillé si score < 100
+        if (validationResult && validationResult.score < 100) {
+            const validationDiv = document.createElement('div');
+            validationDiv.className = 'validation-report-container bg-gray-800 border border-gray-600 rounded-lg p-4 mb-4';
+            
+            let validationHTML = `
+                <div class="flex items-center justify-between mb-3">
+                    <h4 class="font-semibold text-white">📊 Analyse du placement des séances</h4>
+                    <span class="text-sm ${validationResult.score >= 80 ? 'text-green-400' : validationResult.score >= 60 ? 'text-yellow-400' : 'text-red-400'}">
+                        Score: ${validationResult.score}/100
+                    </span>
+                </div>
+            `;
+            
+            // Erreurs critiques
+            if (validationResult.errors && validationResult.errors.length > 0) {
+                validationHTML += `
+                    <div class="validation-section mb-3">
+                        <p class="text-red-400 font-semibold mb-2">⛔ Erreurs critiques:</p>
+                        <ul class="space-y-2">
+                `;
+                validationResult.errors.forEach(error => {
+                    validationHTML += `
+                        <li class="text-sm">
+                            <p class="text-red-300">${error.message}</p>
+                            <p class="text-gray-400 text-xs mt-1">💡 ${error.suggestion}</p>
+                        </li>
+                    `;
+                });
+                validationHTML += `</ul></div>`;
+            }
+            
+            // Avertissements
+            if (validationResult.warnings && validationResult.warnings.length > 0) {
+                validationHTML += `
+                    <div class="validation-section mb-3">
+                        <p class="text-yellow-400 font-semibold mb-2">⚠️ Avertissements:</p>
+                        <ul class="space-y-2">
+                `;
+                validationResult.warnings.forEach(warning => {
+                    validationHTML += `
+                        <li class="text-sm">
+                            <p class="text-yellow-300">${warning.message}</p>
+                            <p class="text-gray-400 text-xs mt-1">💡 ${warning.suggestion}</p>
+                        </li>
+                    `;
+                });
+                validationHTML += `</ul></div>`;
+            }
+            
+            // Recommandations
+            if (validationResult.recommendations && validationResult.recommendations.length > 0) {
+                validationHTML += `
+                    <div class="validation-section">
+                        <p class="text-blue-400 font-semibold mb-2">💡 Recommandations d'optimisation:</p>
+                        <ul class="space-y-2">
+                `;
+                validationResult.recommendations.forEach(rec => {
+                    validationHTML += `
+                        <li class="text-sm">
+                            <p class="text-blue-300">${rec.message}</p>
+                            <p class="text-gray-400 text-xs mt-1">${rec.suggestion}</p>
+                        </li>
+                    `;
+                });
+                validationHTML += `</ul></div>`;
+            }
+            
+            validationDiv.innerHTML = validationHTML;
+            content.appendChild(validationDiv);
+        }
+        
+        // Afficher les alertes simples (compatibilité ancienne version)
+        if (alerts.length > 0 && (!validationResult || validationResult.score === 100)) {
             const alertsDiv = document.createElement('div');
             alertsDiv.className = 'bg-yellow-900/30 border border-yellow-700 rounded-lg p-3 mb-3';
             alertsDiv.innerHTML = `
@@ -271,8 +356,8 @@ const Render = {
             content.appendChild(alertsDiv);
         }
         
-        // Afficher les recommandations si présentes
-        if (recommendations.length > 0) {
+        // Afficher les recommandations simples (compatibilité ancienne version)
+        if (recommendations.length > 0 && (!validationResult || validationResult.score === 100)) {
             const recsDiv = document.createElement('div');
             recsDiv.className = 'bg-blue-900/30 border border-blue-700 rounded-lg p-3 mb-3';
             recsDiv.innerHTML = `
@@ -284,9 +369,13 @@ const Render = {
             content.appendChild(recsDiv);
         }
         
+        // 🆕 Afficher le planning visuel de la semaine
+        const weekCalendar = this.createWeekCalendar(week.sessions);
+        content.appendChild(weekCalendar);
+        
         // Liste des séances
         const sessionsContainer = document.createElement('div');
-        sessionsContainer.className = 'sessions-list space-y-2';
+        sessionsContainer.className = 'sessions-list space-y-2 mt-4';
         sessionsContainer.dataset.weekIndex = weekIndex;
         
         week.sessions.forEach((session, sessionIndex) => {
@@ -297,6 +386,67 @@ const Render = {
         content.appendChild(sessionsContainer);
         
         return content;
+    }
+    
+    /**
+     * 🆕 Créer un calendrier visuel de la semaine
+     */
+    createWeekCalendar(sessions) {
+        const calendar = document.createElement('div');
+        calendar.className = 'week-calendar bg-gray-800 rounded-lg p-3 mb-3';
+        
+        const days = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+        const daysFull = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+        
+        // Créer un tableau des séances par jour
+        const sessionsByDay = new Array(7).fill(null);
+        sessions.forEach(session => {
+            if (session.assignedDay !== undefined) {
+                sessionsByDay[session.assignedDay] = session;
+            }
+        });
+        
+        let calendarHTML = '<div class="grid grid-cols-7 gap-1">';
+        
+        days.forEach((day, index) => {
+            const session = sessionsByDay[index];
+            const hasSession = session !== null;
+            
+            let bgColor = 'bg-gray-700';
+            let icon = '○';
+            let tooltip = daysFull[index];
+            
+            if (hasSession) {
+                if (session.type === 'quality' || session.intensity === 'I' || session.intensity === 'T') {
+                    bgColor = 'bg-purple-600';
+                    icon = '⚡';
+                    tooltip = `${daysFull[index]}: ${session.name}`;
+                } else if (session.type === 'long') {
+                    bgColor = 'bg-blue-600';
+                    icon = '🏃';
+                    tooltip = `${daysFull[index]}: ${session.name}`;
+                } else {
+                    bgColor = 'bg-green-600';
+                    icon = '✓';
+                    tooltip = `${daysFull[index]}: ${session.name}`;
+                }
+            }
+            
+            calendarHTML += `
+                <div class="${bgColor} rounded text-center p-2 text-white text-xs font-semibold relative group">
+                    <div>${day}</div>
+                    <div class="text-lg">${icon}</div>
+                    <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block bg-gray-900 text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">
+                        ${tooltip}
+                    </div>
+                </div>
+            `;
+        });
+        
+        calendarHTML += '</div>';
+        calendar.innerHTML = calendarHTML;
+        
+        return calendar;
     },
     
     /**
