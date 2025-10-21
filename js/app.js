@@ -298,7 +298,7 @@ const App = {
         };
         
         return week;
-    }
+    },
     
     /**
      * 🆕 Générer le planning hebdomadaire avec jours assignés
@@ -368,7 +368,7 @@ const App = {
         
         // Filtrer les sessions placées et retourner
         return schedule.filter(s => s !== null);
-    }
+    },
     
     /**
      * 🆕 Valider le placement des séances
