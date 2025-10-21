@@ -3,485 +3,477 @@
  * js/ui/render.js - Affichage du plan
  * ================================================
  * Rendu des semaines, séances et graphiques
- * VERSION 2.2.1 - Avec correctifs bugs #3
- * Date: 20 octobre 2025
+ * VERSION 2.2.2 - Avec correctifs bugs #3
+ * Date: 21 octobre 2025
+ * 
+ * CHANGELOG 2.2.2:
+ * - BUG FIX #3: Correction accès aux alertes (week.alerts au lieu de week.sessions.metadata.alerts)
  */
+
 const Render = {
-	/**
-	* Afficher le plan complet
-	*/
-	renderPlan(planData, openStates = new Map(), activePhase = null) {
-		// 🆕 VÉRIFICATIONS DE SÉCURITÉ
-		const placeholder = document.querySelector('#plan-placeholder');
-		const wrapper = document.querySelector('#plan-content-wrapper');
-		const content = document.querySelector('#plan-content');
-
-		if (!placeholder || !wrapper || !content) {
-			console.error('❌ Éléments DOM manquants pour le rendu du plan');
-			console.error('Vérifiez que index.html contient :');
-			console.error('- #plan-placeholder');
-			console.error('- #plan-content-wrapper');
-			console.error('- #plan-content');
-			return;
-		}
-    
-		placeholder.classList.add('hidden');
-		wrapper.classList.remove('hidden');
-		content.innerHTML = '';
-    
-		// En-tête avec allures
-		this.renderHeader(content, planData);
-    
-		// Onglets de phases
-		this.renderPhaseTabs(content, planData, activePhase);
-    
-		// Semaines
-		planData.plan.forEach((week, weekIndex) => {
-			this.renderWeek(content, week, weekIndex, planData, openStates);
-		});
-    
-		// Afficher les boutons d'action
-		this.showPlanControls();
-    
-		// Filtrer par phase active
-		const phaseToDisplay = activePhase || [...new Set(planData.plan.map(w => w.phase))][0];
-		this.filterWeeksByPhase(phaseToDisplay);
-
-		// Ajouter et Supprimer des séances
-		setTimeout(() => SessionManager.addSessionButtons(), 100);
-	},
-
-	/**
-	* Afficher l'en-tête avec les allures
-	*/
-	renderHeader(container, planData) {
-		const paceKeys = ['C', 'M', 'T', 'I', 'R'];
-		const paceItems = paceKeys.map(key => `
-			<div class="card p-2 rounded-md text-center">
-				<p class="font-bold text-green-400">${CONFIG.paceLabels[key]}</p>
-				<p class="pace-value font-semibold">${Formatters.secondsToPace(planData.paces[key]).replace('/km', '')}</p>
-			</div>
-		`).join('');
-
-		const enduranceItem = `
-			<div class="card p-2 rounded-md text-center">
-				<p class="font-bold pace-label">${CONFIG.paceLabels.E}</p>
-				<p class="pace-value font-semibold">${Formatters.secondsToPace(planData.paces.E_high).replace('/km', '')} - ${Formatters.secondsToPace(planData.paces.E_low).replace('/km', '')}</p>
-			</div>
-		`;
-
-    
-		const header = document.createElement('div');
-		header.className = 'mb-6 pb-4 border-b border-gray-700';
-		header.innerHTML = `
-			<h2 class="text-3xl font-bold text-white">Plan de ${planData.plan.length} semaines</h2>
-			<p class="text-sm text-gray-400 mt-1">Profil: ${DOM.runnerLevel.options[DOM.runnerLevel.selectedIndex].text}</p>
-			<div class="mt-4 grid grid-cols-3 md:grid-cols-6 gap-2 text-sm">${paceItems}${enduranceItem}</div>
-			<div id="phase-tabs" class="flex space-x-1 mt-4 border-b border-gray-700"></div>
-		`;
-    
-		container.appendChild(header);
-	},
-
-	/**
-	* Afficher les onglets de phases
-	*/
-	renderPhaseTabs(container, planData, activePhase) {
-		const phases = [...new Set(planData.plan.map(w => w.phase))];
-		const phaseToDisplay = activePhase || phases[0];
-		const tabsContainer = container.querySelector('#phase-tabs');
-    
-		if (!tabsContainer) {
-			console.warn('⚠️ #phase-tabs non trouvé');
-			return;
-		}
-    
-		phases.forEach(phase => {
-			const tab = document.createElement('button');
-			tab.textContent = phase;
-			tab.className = 'phase-tab px-4 py-2 text-sm';
-			if (phase === phaseToDisplay) tab.classList.add('active');
-			tab.dataset.phase = phase;
-			tab.addEventListener('click', (e) => this.filterWeeksByPhase(e.target.dataset.phase));
-			tabsContainer.appendChild(tab);
-		});
-	},
-
-	/**
-	* Afficher une semaine
-	*/
-	renderWeek(container, week, weekIndex, planData, openStates) {
-		const weekEl = document.createElement('details');
-		const wasOpen = openStates.get(weekIndex.toString());
-		weekEl.open = wasOpen !== undefined ? wasOpen : (week.weekNumber === 1);
-		weekEl.className = `card rounded-lg mb-4 overflow-hidden week-details phase-${week.phase.replace(/\s+/g, '-')}`;
-		weekEl.dataset.phase = week.phase;
-    
-		// 🆕 Détecter si la semaine contient un test
-		const hasTest = week.sessions.some(s => 
-			s.isTest || s.type?.includes('Test') || s.type?.includes('🔬')
-		);
-		if (hasTest) {
-			weekEl.classList.add('has-test');
-		}
-    
-		const endDate = DateUtils.addDays(week.startDate, 6);
-		const tss = week.tss || 0;
-		const maxPlanTSS = Math.max(...planData.plan.map(w => w.tss || 0));
-		const loadPercent = (tss / maxPlanTSS) * 100;
-    
-		let loadClass, loadLabel;
-		if (loadPercent < 50) { loadClass = 'load-low'; loadLabel = 'Faible'; }
-			else if (loadPercent < 70) { loadClass = 'load-medium'; loadLabel = 'Modérée'; }
-			else if (loadPercent < 85) { loadClass = 'load-high'; loadLabel = 'Élevée'; }
-			else { loadClass = 'load-very-high'; loadLabel = 'Très élevée'; }
-    
-		// Badge test amélioré
-		const testBadge = hasTest ? '<span class="test-badge ml-2 px-2 py-1 bg-purple-600 text-xs rounded font-semibold">🔬 TEST</span>' : '';
-    
-		// ✅ BUG FIX #3: Afficher alertes SmartPlacement depuis week.alerts (pas week.sessions.metadata)
-		let alertsBadge = '';
-		if (week.alerts && week.alerts.length > 0) {
-			const criticalAlerts = week.alerts.filter(a => a.type === 'critical');
-			const warningAlerts = week.alerts.filter(a => a.type === 'warning');
+    /**
+     * Afficher le plan complet
+     */
+    renderPlan(planData, openStates = new Map(), activePhase = null) {
+        // 🆕 VÉRIFICATIONS DE SÉCURITÉ
+        const placeholder = document.querySelector('#plan-placeholder');
+        const wrapper = document.querySelector('#plan-content-wrapper');
+        const content = document.querySelector('#plan-content');
         
-			if (criticalAlerts.length > 0) {
-				alertsBadge = '<span class="alert-badge ml-2 px-2 py-1 bg-red-600 text-xs rounded font-semibold">🚨 CRITIQUE</span>';
-			} else if (warningAlerts.length > 0) {
-				alertsBadge = '<span class="alert-badge ml-2 px-2 py-1 bg-yellow-600 text-xs rounded font-semibold">⚠️ ALERTE</span>';
-			}
-		}
+        if (!placeholder || !wrapper || !content) {
+            console.error('❌ Éléments DOM manquants pour le rendu du plan');
+            console.error('Vérifiez que index.html contient :');
+            console.error('- #plan-placeholder');
+            console.error('- #plan-content-wrapper');
+            console.error('- #plan-content');
+            return;
+        }
+        
+        placeholder.classList.add('hidden');
+        wrapper.classList.remove('hidden');
+        content.innerHTML = '';
+        
+        // En-tête avec allures
+        this.renderHeader(content, planData);
+        
+        // Onglets de phases
+        this.renderPhaseTabs(content, planData, activePhase);
+        
+        // Semaines
+        planData.weeks.forEach((week, weekIndex) => {
+            this.renderWeek(content, week, weekIndex, planData, openStates);
+        });
+        
+        // Afficher les boutons d'action
+        this.showPlanControls();
+        
+        // Filtrer par phase active
+        const phaseToDisplay = activePhase || [...new Set(planData.weeks.map(w => w.phase))][0];
+        this.filterWeeksByPhase(phaseToDisplay);
+    },
     
-		weekEl.innerHTML = `
-			<summary class="p-4 cursor-pointer hover:bg-gray-800">
-				<div class="flex justify-between items-center flex-wrap">
-					<div class="mr-4">
-						<h3 class="font-bold text-lg text-white">Semaine ${week.weekNumber} <span class="text-sm font-normal text-gray-400">(${week.phase})</span>${testBadge}${alertsBadge}</h3>
-						<p class="text-xs text-gray-500">${DateUtils.format(week.startDate)} - ${DateUtils.format(endDate)}</p>
-					</div>
-					<div class="flex items-center gap-4 mt-2 sm:mt-0">
-						<div class="text-right">
-							<p class="text-xs text-gray-400">Charge: ${loadLabel}</p>
-							<div class="w-24 h-1 bg-gray-700 rounded mt-1">
-								<div class="load-indicator ${loadClass}" style="width: ${loadPercent}%"></div>
-							</div>
-						</div>
-						<span class="font-semibold text-green-400">~${Math.round(week.totalKm)} km</span>
-					</div>
-				</div>
-			</summary>
-			<div class="p-4 border-t border-gray-700 grid grid-cols-1 md:grid-cols-7 gap-3 week-content" data-week-index="${weekIndex}"></div>
-		`;
+    /**
+     * Afficher l'en-tête avec les allures
+     */
+    renderHeader(container, planData) {
+        const paceKeys = ['M', 'T', 'I', 'R'];
+        const paceItems = paceKeys.map(key => `
+            <div class="card p-2 rounded-md text-center">
+                <p class="font-bold text-green-400">${this.getPaceLabel(key)}</p>
+                <p class="text-white font-semibold">${Formatters.secondsToPace(planData.paces[key]).replace('/km', '')}</p>
+            </div>
+        `).join('');
+        
+        const enduranceItem = `
+            <div class="card p-2 rounded-md text-center">
+                <p class="font-bold text-green-400">Endurance</p>
+                <p class="text-white font-semibold">${Formatters.secondsToPace(planData.paces.E_high).replace('/km', '')} - ${Formatters.secondsToPace(planData.paces.E_low).replace('/km', '')}</p>
+            </div>
+        `;
+        
+        const header = document.createElement('div');
+        header.className = 'mb-6 pb-4 border-b border-gray-700';
+        header.innerHTML = `
+            <h2 class="text-3xl font-bold text-white mb-2">Plan de ${planData.weeks.length} semaines</h2>
+            <p class="text-sm text-gray-400">Objectif: ${planData.userInput.raceDistance.toUpperCase()} • VDOT: ${planData.vdot}</p>
+            <div class="mt-4 grid grid-cols-3 md:grid-cols-5 gap-2 text-sm">
+                ${enduranceItem}
+                ${paceItems}
+            </div>
+        `;
+        container.appendChild(header);
+    },
     
-		const weekContent = weekEl.querySelector('.week-content');
-		this.renderWeekSessions(weekContent, week, weekIndex);
+    /**
+     * Obtenir le label d'une allure
+     */
+    getPaceLabel(key) {
+        const labels = {
+            'E': 'Endurance',
+            'M': 'Marathon',
+            'T': 'Seuil',
+            'I': 'VMA',
+            'R': 'Répétitions'
+        };
+        return labels[key] || key;
+    },
     
-		// ✅ BUG FIX #3: Afficher les alertes SmartPlacement depuis week.alerts/recommendations
-		if (week.alerts?.length > 0 || week.recommendations?.length > 0) {
-			this.renderWeekAlerts(weekEl, {
-				alerts: week.alerts || [],
-				recommendations: week.recommendations || [],
-				tss: week.tss || 0,
-				fatigue: week.fatigue || {}
-			});
-		}
-    
-		container.appendChild(weekEl);
-	},
-
-	/**
-	* 🆕 Afficher les alertes d'une semaine
-	*/
-	renderWeekAlerts(weekEl, metadata) {
-		const alertsContainer = document.createElement('div');
-		alertsContainer.className = 'p-4 border-t border-gray-700 bg-gray-800';
-    
-		let html = '<div class="space-y-2">';
-    
-		// Alertes critiques et warnings
-		if (metadata.alerts && metadata.alerts.length > 0) {
-			metadata.alerts.forEach(alert => {
-				const bgColor = alert.type === 'critical' ? 'bg-red-900' : 'bg-yellow-900';
-				const borderColor = alert.type === 'critical' ? 'border-red-600' : 'border-yellow-600';
+    /**
+     * Afficher les onglets de phases
+     */
+    renderPhaseTabs(container, planData, activePhase) {
+        const phases = [...new Set(planData.weeks.map(w => w.phase))];
+        const firstPhase = activePhase || phases[0];
+        
+        const tabsContainer = document.createElement('div');
+        tabsContainer.id = 'phase-tabs';
+        tabsContainer.className = 'flex space-x-1 mb-6 bg-gray-800 p-1 rounded-lg';
+        
+        phases.forEach(phase => {
+            const tab = document.createElement('button');
+            tab.className = `flex-1 py-2 px-4 rounded-md font-semibold transition-all ${
+                phase === firstPhase 
+                    ? 'bg-green-600 text-white' 
+                    : 'bg-transparent text-gray-400 hover:text-white hover:bg-gray-700'
+            }`;
+            tab.textContent = phase;
+            tab.dataset.phase = phase;
             
-				html += `
-					<div class="p-3 rounded-md border-l-4 ${bgColor} ${borderColor}">
-						<p class="font-bold text-sm">${alert.title}</p>
-						<p class="text-xs text-gray-300 mt-1">${alert.message}</p>
-						<p class="text-xs text-gray-400 mt-1 italic">→ ${alert.action}</p>
-					</div>
-				`;
-			});
-		}
-    
-		// Recommandations
-		if (metadata.recommendations && metadata.recommendations.length > 0) {
-			metadata.recommendations.forEach(rec => {
-				html += `
-					<div class="p-3 rounded-md border-l-4 bg-blue-900 border-blue-600">
-						<p class="font-bold text-sm">${rec.title}</p>
-						<p class="text-xs text-gray-300 mt-1">${rec.message}</p>
-						<p class="text-xs text-gray-400 mt-1 italic">→ ${rec.action}</p>
-					</div>
-				`;
-			});
-		}
-    
-		html += '</div>';
-		alertsContainer.innerHTML = html;
-		weekEl.appendChild(alertsContainer);
-	},
-
-	/**
-	* Afficher les séances d'une semaine
-	*/
-	renderWeekSessions(container, week, weekIndex) {
-		const sessionsByDay = new Map(week.sessions.map(s => [s.day, s]));
-    
-		for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
-			if (sessionsByDay.has(dayIndex)) {
-				const session = sessionsByDay.get(dayIndex);
-				const sessionIndex = week.sessions.indexOf(session);
-				const sessionEl = this.createSessionCard(session, sessionIndex, dayIndex, weekIndex);
-				container.appendChild(sessionEl);
-			} else {
-				const emptySlot = this.createEmptySlot(dayIndex);
-				container.appendChild(emptySlot);
-			}
-		}
-	},
-
-	/**
-	* Créer une carte de séance
-	*/
-	createSessionCard(session, sessionIndex, dayIndex, weekIndex) {
-		const sessionEl = document.createElement('div');
-		sessionEl.className = `border-transparent p-3 rounded-md session-card intensity-${session.intensity}`;
-		sessionEl.setAttribute('draggable', true);
-		sessionEl.dataset.sessionIndex = sessionIndex;
-		sessionEl.dataset.dayIndex = dayIndex;
-		sessionEl.dataset.weekIndex = weekIndex;
-    
-		// Classe spéciale pour les tests
-		if (session.isTest || session.type?.includes('Test') || session.type?.includes('🔬')) {
-			sessionEl.classList.add('test-session');
-			sessionEl.setAttribute('data-type', 'test');
-		}
-    
-		// 🆕 Notes de variation si disponibles
-		let notesHtml = '';
-		if (session.notes && session.notes.length > 0) {
-			notesHtml = `<p class="text-xs text-blue-400 mt-1">${session.notes.join(' ')}</p>`;
-		}
-    
-		let detailsHtml = '';
-		if (session.structure) {
-			detailsHtml = `<ul class="text-sm text-gray-400 mt-1">
-				${session.structure.echauffement ? `<li><strong>Échauf:</strong> ${session.structure.echauffement}</li>` : ''}
-				${session.structure.bloc ? `<li><strong>Bloc:</strong> ${session.structure.bloc}</li>` : ''}
-				${session.structure.recuperation ? `<li><strong>Récup:</strong> ${session.structure.recuperation}</li>` : ''}
-				${session.structure.retourAuCalme ? `<li><strong>RC:</strong> ${session.structure.retourAuCalme}</li>` : ''}
-			</ul>`;
-		} else {
-			detailsHtml = `<p class="text-sm text-gray-400 mt-1">${session.details || ''}</p>`;
-		}
-    
-		const testIcon = session.isTest ? ' 🔬' : '';
-		sessionEl.innerHTML = `
-			<p class="font-bold text-green-400 pointer-events-none">${CONFIG.fullDayNames[dayIndex].substring(0,3)}: ${session.type}${testIcon} (~${(session.distance || 0).toFixed(1)} km)</p>
-			${detailsHtml}
-			${notesHtml}
-		`;
-    
-		return sessionEl;
-	},
-
-	/**
-	* Créer un slot vide
-	*/
-	createEmptySlot(dayIndex) {
-		const emptySlot = document.createElement('div');
-		emptySlot.className = 'empty-day-slot flex items-center justify-center text-gray-600 text-sm';
-		emptySlot.textContent = CONFIG.fullDayNames[dayIndex].substring(0,3);
-		emptySlot.dataset.dayIndex = dayIndex;
-		return emptySlot;
-	},
-
-	/**
-	* Filtrer les semaines par phase
-	*/
-	filterWeeksByPhase(phase) {
-		const tabs = document.querySelectorAll('#phase-tabs .phase-tab');
-		if (tabs.length === 0) {
-			console.warn('⚠️ Aucun onglet de phase trouvé');
-			return;
-		}
-    
-		tabs.forEach(tab => {
-			tab.classList.toggle('active', tab.dataset.phase === phase);
-		});
-    
-		document.querySelectorAll('.week-details').forEach(weekEl => {
-			weekEl.style.display = weekEl.dataset.phase === phase ? '' : 'none';
-		});
-	},
-
-	/**
-	* Afficher le graphique de charge
-	*/
-	renderLoadChart(planData) {
-		const chartContainer = document.querySelector('#load-chart');
-		const chartWrapper = document.querySelector('#load-chart-container');
-    
-		if (!chartContainer || !chartWrapper) {
-			console.warn('⚠️ Éléments de graphique manquants');
-			return;
-		}
-    
-		chartContainer.innerHTML = '';
-		chartWrapper.classList.remove('hidden');
-    
-		const maxTSS = Math.max(...planData.plan.map(w => w.tss));
-		const chartWidth = chartContainer.offsetWidth;
-		const barWidth = Math.max(20, (chartWidth / planData.plan.length) - 4);
-    
-		planData.plan.forEach((week, index) => {
-			// Conteneur pour la barre + label
-			const barContainer = document.createElement('div');
-			barContainer.className = 'chart-bar-container';
-			barContainer.style.position = 'absolute';
-			barContainer.style.left = `${index * (barWidth + 4)}px`;
-			barContainer.style.width = `${barWidth}px`;
-			barContainer.style.height = '100%';
-			barContainer.style.display = 'flex';
-			barContainer.style.flexDirection = 'column';
-			barContainer.style.justifyContent = 'flex-end';
-			barContainer.style.alignItems = 'center';
-			barContainer.style.cursor = 'pointer';
-        
-			// Barre
-			const bar = document.createElement('div');
-			const heightPercent = (week.tss / maxTSS) * 100;
-        
-			let loadClass;
-			if (week.tss < maxTSS * 0.5) loadClass = 'load-low';
-			else if (week.tss < maxTSS * 0.7) loadClass = 'load-medium';
-			else if (week.tss < maxTSS * 0.85) loadClass = 'load-high';
-			else loadClass = 'load-very-high';
-        
-			// Marqueur visuel pour les semaines de test
-			const hasTest = week.sessions.some(s => s.isTest || s.type?.includes('Test'));
-			if (hasTest) {
-				bar.classList.add('test-week-bar');
-			}
-        
-			bar.className = `chart-bar ${loadClass}`;
-			bar.style.width = '100%';
-			bar.style.height = `${heightPercent}%`;
-			bar.style.marginBottom = '4px';
-			bar.title = `S${week.weekNumber}: ${Math.round(week.tss)} TSS - ${week.totalKm}km - ${week.phase}${hasTest ? ' - 🔬 TEST' : ''}`;
-        
-			// Label "S1", "S2", etc.
-			const label = document.createElement('div');
-			label.className = 'chart-bar-label';
-			label.textContent = `S${week.weekNumber}`;
-			label.style.fontSize = '10px';
-			label.style.color = '#9ca3af';
-			label.style.textAlign = 'center';
-			label.style.marginTop = '2px';
-			label.style.whiteSpace = 'nowrap';
-			label.style.pointerEvents = 'none';
-        
-			// Événement click sur le conteneur
-			barContainer.addEventListener('click', () => {
-				// 1. Trouver l'élément semaine
-				const weekEl = document.querySelector(`[data-week-index="${index}"]`);
-				if (!weekEl) return;
+            tab.addEventListener('click', () => {
+                this.filterWeeksByPhase(phase);
+            });
             
-				const detailsEl = weekEl.closest('details');
-				if (!detailsEl) return;
+            tabsContainer.appendChild(tab);
+        });
+        
+        container.appendChild(tabsContainer);
+    },
+    
+    /**
+     * Filtrer les semaines par phase
+     */
+    filterWeeksByPhase(phase) {
+        // Mettre à jour les onglets
+        document.querySelectorAll('#phase-tabs button').forEach(btn => {
+            if (btn.dataset.phase === phase) {
+                btn.className = 'flex-1 py-2 px-4 rounded-md font-semibold transition-all bg-green-600 text-white';
+            } else {
+                btn.className = 'flex-1 py-2 px-4 rounded-md font-semibold transition-all bg-transparent text-gray-400 hover:text-white hover:bg-gray-700';
+            }
+        });
+        
+        // Afficher/masquer les semaines
+        document.querySelectorAll('.week-card').forEach(card => {
+            if (card.dataset.phase === phase) {
+                card.classList.remove('hidden');
+            } else {
+                card.classList.add('hidden');
+            }
+        });
+    },
+    
+    /**
+     * Afficher une semaine
+     */
+    renderWeek(container, week, weekIndex, planData, openStates) {
+        const isOpen = openStates.get(weekIndex) || false;
+        
+        const weekCard = document.createElement('div');
+        weekCard.className = 'week-card card mb-4';
+        weekCard.dataset.phase = week.phase;
+        weekCard.dataset.weekIndex = weekIndex;
+        
+        // En-tête de semaine
+        const weekHeader = this.createWeekHeader(week, weekIndex, isOpen, planData);
+        weekCard.appendChild(weekHeader);
+        
+        // Contenu de semaine (séances)
+        if (isOpen) {
+            const weekContent = this.createWeekContent(week, weekIndex, planData);
+            weekCard.appendChild(weekContent);
+        }
+        
+        container.appendChild(weekCard);
+    },
+    
+    /**
+     * Créer l'en-tête d'une semaine
+     */
+    createWeekHeader(week, weekIndex, isOpen, planData) {
+        const header = document.createElement('div');
+        header.className = 'week-header flex items-center justify-between p-4 cursor-pointer hover:bg-gray-750 transition-colors';
+        
+        // ✅ BUG FIX #3: Accéder directement à week.alerts
+        const alerts = week.alerts || [];
+        const hasAlerts = alerts.length > 0;
+        
+        const totalKm = week.sessions.reduce((sum, s) => sum + (s.volume || 0), 0);
+        
+        header.innerHTML = `
+            <div class="flex items-center space-x-4 flex-1">
+                <div class="flex items-center space-x-2">
+                    <span class="text-2xl font-bold text-white">S${week.number}</span>
+                    ${week.isRecovery ? '<span class="badge-recovery">Récup</span>' : ''}
+                    ${hasAlerts ? '<span class="badge-alert">⚠️</span>' : ''}
+                </div>
+                <div class="text-sm text-gray-400">
+                    <span class="font-semibold text-white">${week.phase}</span>
+                    <span class="mx-2">•</span>
+                    <span>${totalKm.toFixed(1)} km</span>
+                    <span class="mx-2">•</span>
+                    <span>TSS: ${week.totalTSS}</span>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3">
+                ${this.createFatigueIndicator(week.fatigue)}
+                <svg class="w-5 h-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}" 
+                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </div>
+        `;
+        
+        // Gérer le clic pour ouvrir/fermer
+        header.addEventListener('click', () => {
+            const newState = new Map(STATE.openWeeks);
+            newState.set(weekIndex, !isOpen);
+            STATE.openWeeks = newState;
+            this.renderPlan(planData, newState, null);
+        });
+        
+        return header;
+    },
+    
+    /**
+     * Créer l'indicateur de fatigue
+     */
+    createFatigueIndicator(fatigue) {
+        if (!fatigue) return '';
+        
+        const colors = {
+            'Frais': 'bg-blue-500',
+            'Optimal': 'bg-green-500',
+            'Fatigué': 'bg-yellow-500',
+            'Très fatigué': 'bg-red-500'
+        };
+        
+        const color = colors[fatigue.status] || 'bg-gray-500';
+        
+        return `
+            <div class="flex items-center space-x-2">
+                <div class="w-2 h-2 rounded-full ${color}"></div>
+                <span class="text-xs text-gray-400">${fatigue.status}</span>
+            </div>
+        `;
+    },
+    
+    /**
+     * Créer le contenu d'une semaine (liste des séances)
+     */
+    createWeekContent(week, weekIndex, planData) {
+        const content = document.createElement('div');
+        content.className = 'week-content border-t border-gray-700 p-4 space-y-3';
+        
+        // ✅ BUG FIX #3: Alertes accessibles directement
+        const alerts = week.alerts || [];
+        const recommendations = week.recommendations || [];
+        
+        // Afficher les alertes si présentes
+        if (alerts.length > 0) {
+            const alertsDiv = document.createElement('div');
+            alertsDiv.className = 'bg-yellow-900/30 border border-yellow-700 rounded-lg p-3 mb-3';
+            alertsDiv.innerHTML = `
+                <p class="font-semibold text-yellow-400 mb-2">⚠️ Alertes</p>
+                <ul class="text-sm text-yellow-200 space-y-1">
+                    ${alerts.map(alert => `<li>• ${alert}</li>`).join('')}
+                </ul>
+            `;
+            content.appendChild(alertsDiv);
+        }
+        
+        // Afficher les recommandations si présentes
+        if (recommendations.length > 0) {
+            const recsDiv = document.createElement('div');
+            recsDiv.className = 'bg-blue-900/30 border border-blue-700 rounded-lg p-3 mb-3';
+            recsDiv.innerHTML = `
+                <p class="font-semibold text-blue-400 mb-2">💡 Recommandations</p>
+                <ul class="text-sm text-blue-200 space-y-1">
+                    ${recommendations.map(rec => `<li>• ${rec}</li>`).join('')}
+                </ul>
+            `;
+            content.appendChild(recsDiv);
+        }
+        
+        // Liste des séances
+        const sessionsContainer = document.createElement('div');
+        sessionsContainer.className = 'sessions-list space-y-2';
+        sessionsContainer.dataset.weekIndex = weekIndex;
+        
+        week.sessions.forEach((session, sessionIndex) => {
+            const sessionCard = this.createSessionCard(session, sessionIndex, weekIndex, planData);
+            sessionsContainer.appendChild(sessionCard);
+        });
+        
+        content.appendChild(sessionsContainer);
+        
+        return content;
+    },
+    
+    /**
+     * Créer une carte de séance
+     */
+    createSessionCard(session, sessionIndex, weekIndex, planData) {
+        const card = document.createElement('div');
+        card.className = 'session-card bg-gray-750 rounded-lg p-3 hover:bg-gray-700 transition-colors cursor-move';
+        card.draggable = true;
+        card.dataset.weekIndex = weekIndex;
+        card.dataset.sessionIndex = sessionIndex;
+        card.dataset.sessionId = session.id;
+        
+        const typeColors = {
+            'long': 'bg-blue-600',
+            'quality': 'bg-purple-600',
+            'easy': 'bg-green-600',
+            'recovery': 'bg-gray-600'
+        };
+        
+        const typeColor = typeColors[session.type] || 'bg-gray-600';
+        
+        card.innerHTML = `
+            <div class="flex items-start justify-between">
+                <div class="flex-1">
+                    <div class="flex items-center space-x-2 mb-1">
+                        <span class="w-2 h-2 rounded-full ${typeColor}"></span>
+                        <span class="font-semibold text-white">${session.name}</span>
+                        ${session.adjusted ? '<span class="text-xs text-yellow-400">✨ Ajusté</span>' : ''}
+                    </div>
+                    <p class="text-sm text-gray-400">${session.description}</p>
+                    <div class="flex items-center space-x-3 mt-2 text-xs text-gray-500">
+                        <span>${session.volume.toFixed(1)} km</span>
+                        <span>•</span>
+                        <span>TSS: ${session.tss}</span>
+                    </div>
+                </div>
+                <button class="edit-session-btn text-gray-400 hover:text-white transition-colors"
+                        data-week-index="${weekIndex}"
+                        data-session-index="${sessionIndex}">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                </button>
+            </div>
+        `;
+        
+        // Gestionnaire d'événement pour l'édition
+        card.querySelector('.edit-session-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            SessionManager.openSessionModal(weekIndex, sessionIndex, planData);
+        });
+        
+        return card;
+    },
+    
+    /**
+     * Afficher les contrôles du plan (boutons d'action)
+     */
+    showPlanControls() {
+        const buttons = ['#save-plan', '#print-plan', '#reset-plan'];
+        buttons.forEach(selector => {
+            const btn = document.querySelector(selector);
+            if (btn) {
+                btn.classList.remove('hidden');
+            }
+        });
+    },
+    
+    /**
+     * Afficher le graphique de charge
+     */
+    renderLoadChart(planData) {
+        const chartContainer = document.querySelector('#load-chart');
+        if (!chartContainer) return;
+        
+        chartContainer.innerHTML = '';
+        
+        const canvas = document.createElement('canvas');
+        canvas.id = 'tss-chart';
+        canvas.height = 200;
+        chartContainer.appendChild(canvas);
+        
+        const ctx = canvas.getContext('2d');
+        const weeks = planData.weeks;
+        
+        // Préparer les données
+        const labels = weeks.map((w, i) => `S${i + 1}`);
+        const tssData = weeks.map(w => w.totalTSS);
+        const atlData = weeks.map(w => w.fatigue?.ATL || 0);
+        const ctlData = weeks.map(w => w.fatigue?.CTL || 0);
+        
+        // Dessiner le graphique
+        this.drawChart(ctx, canvas, {
+            labels,
+            datasets: [
+                { label: 'TSS', data: tssData, color: 'rgba(34, 197, 94, 0.8)' },
+                { label: 'ATL', data: atlData, color: 'rgba(234, 179, 8, 0.6)' },
+                { label: 'CTL', data: ctlData, color: 'rgba(59, 130, 246, 0.6)' }
+            ]
+        });
+    },
+    
+    /**
+     * Dessiner un graphique simple
+     */
+    drawChart(ctx, canvas, data) {
+        const padding = 40;
+        const width = canvas.width;
+        const height = canvas.height;
+        const chartWidth = width - padding * 2;
+        const chartHeight = height - padding * 2;
+        
+        // Trouver les valeurs min/max
+        const allValues = data.datasets.flatMap(ds => ds.data);
+        const maxValue = Math.max(...allValues);
+        const minValue = 0;
+        
+        // Effacer le canvas
+        ctx.clearRect(0, 0, width, height);
+        
+        // Dessiner les axes
+        ctx.strokeStyle = '#4B5563';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padding, padding);
+        ctx.lineTo(padding, height - padding);
+        ctx.lineTo(width - padding, height - padding);
+        ctx.stroke();
+        
+        // Dessiner chaque dataset
+        data.datasets.forEach(dataset => {
+            ctx.strokeStyle = dataset.color;
+            ctx.fillStyle = dataset.color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
             
-				// 2. Ouvrir la semaine
-				detailsEl.open = true;
+            const stepX = chartWidth / (data.labels.length - 1);
             
-				// 3. Activer la phase correspondante
-				const phase = week.phase;
-				this.filterWeeksByPhase(phase);
-            
-				// 4. Scroll vers la semaine avec un petit délai pour l'animation
-				setTimeout(() => {
-					detailsEl.scrollIntoView({ 
-						behavior: 'smooth', 
-						block: 'center' 
-					});
+            dataset.data.forEach((value, index) => {
+                const x = padding + index * stepX;
+                const y = height - padding - ((value - minValue) / (maxValue - minValue)) * chartHeight;
                 
-					// 5. Flash visuel pour attirer l'attention
-					detailsEl.style.transition = 'box-shadow 0.3s ease';
-					detailsEl.style.boxShadow = '0 0 0 3px rgba(34, 211, 238, 0.5)';
+                if (index === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
                 
-					setTimeout(() => {
-						detailsEl.style.boxShadow = '';
-					}, 1000);
-				}, 100);
-			});
+                // Point
+                ctx.fillRect(x - 2, y - 2, 4, 4);
+            });
+            
+            ctx.stroke();
+        });
         
-			// Effet hover
-			barContainer.addEventListener('mouseenter', () => {
-				bar.style.opacity = '0.8';
-				label.style.color = '#fff';
-			});
+        // Labels
+        ctx.fillStyle = '#9CA3AF';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
         
-			barContainer.addEventListener('mouseleave', () => {
-				bar.style.opacity = '1';
-				label.style.color = '#9ca3af';
-			});
+        data.labels.forEach((label, index) => {
+            const x = padding + index * (chartWidth / (data.labels.length - 1));
+            ctx.fillText(label, x, height - padding + 15);
+        });
         
-			barContainer.appendChild(bar);
-			barContainer.appendChild(label);
-			chartContainer.appendChild(barContainer);
-		});
-	},
-
-	/**
-	* Afficher les boutons de contrôle
-	*/
-	showPlanControls() {
-		const printBtn = document.querySelector('#print-plan');
-		const saveBtn = document.querySelector('#save-plan');
-		const resetBtn = document.querySelector('#reset-plan');
-    
-		if (printBtn) printBtn.classList.remove('hidden');
-		if (saveBtn) saveBtn.classList.remove('hidden');
-		if (resetBtn) resetBtn.classList.remove('hidden');
-	},
-
-	/**
-	* Cacher les boutons de contrôle
-	*/
-	hidePlanControls() {
-		const printBtn = document.querySelector('#print-plan');
-		const saveBtn = document.querySelector('#save-plan');
-		const resetBtn = document.querySelector('#reset-plan');
-		
-		if (printBtn) printBtn.classList.add('hidden');
-		if (saveBtn) saveBtn.classList.add('hidden');
-		if (resetBtn) resetBtn.classList.add('hidden');
-	},
-
-	/**
-	* Réinitialiser l'affichage
-	*/
-	reset() {
-		const content = document.querySelector('#plan-content');
-		const wrapper = document.querySelector('#plan-content-wrapper');
-		const placeholder = document.querySelector('#plan-placeholder');
-		const chartWrapper = document.querySelector('#load-chart-container');
-		
-		if (content) content.innerHTML = '';
-		if (wrapper) wrapper.classList.add('hidden');
-		if (placeholder) placeholder.classList.remove('hidden');
-		if (chartWrapper) chartWrapper.classList.add('hidden');
-		
-		this.hidePlanControls();
-	}
+        // Légende
+        let legendX = padding;
+        const legendY = 20;
+        data.datasets.forEach(dataset => {
+            ctx.fillStyle = dataset.color;
+            ctx.fillRect(legendX, legendY - 8, 12, 12);
+            ctx.fillStyle = '#E5E7EB';
+            ctx.textAlign = 'left';
+            ctx.fillText(dataset.label, legendX + 16, legendY);
+            legendX += 80;
+        });
+    }
 };
