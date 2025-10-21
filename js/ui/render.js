@@ -386,7 +386,7 @@ const Render = {
         content.appendChild(sessionsContainer);
         
         return content;
-    }
+    },
     
     /**
      * 🆕 Créer un calendrier visuel de la semaine
